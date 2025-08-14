@@ -356,3 +356,264 @@ def generate_generic_questions(subject, topic, difficulty, academic_level, num_n
         questions.append(template)
     
     return questions
+
+def generate_enhanced_fallback_assessment(quiz_data, user_answers, quiz_type, subject, topic):
+    """
+    Generate comprehensive fallback assessment with detailed question-by-question feedback
+    """
+    questions = quiz_data.get('questions', [])
+    total_questions = len(questions)
+    correct_answers = 0
+    question_feedback = []
+    
+    # Sample correct answers for common topics (this would ideally be dynamic)
+    sample_correct_answers = {
+        'cryptocurrency': {
+            'What is the first and most famous cryptocurrency?': 'B',
+            'What is a smart contract?': 'A', 
+            'What is a \'block\' in blockchain?': 'C',
+            'What makes blockchain secure?': 'A',
+            'What is a consensus mechanism?': 'B'
+        },
+        'blockchain': {
+            'What is the first and most famous cryptocurrency?': 'B',
+            'What is a smart contract?': 'A',
+            'What is a \'block\' in blockchain?': 'C', 
+            'What makes blockchain secure?': 'A',
+            'What is a consensus mechanism?': 'B'
+        }
+    }
+    
+    # Get correct answers for this topic
+    topic_lower = topic.lower()
+    correct_answer_map = sample_correct_answers.get(topic_lower, {})
+    
+    for i, question in enumerate(questions):
+        question_id = i + 1
+        question_text = question.get('question', f'Question {question_id}')
+        options = question.get('options', {})
+        user_answer = user_answers.get(str(question_id), 'No answer provided')
+        
+        # Try to find correct answer
+        correct_answer = correct_answer_map.get(question_text, 'B')  # Default fallback
+        
+        # Determine if answer is correct
+        is_correct = user_answer == correct_answer
+        if is_correct:
+            correct_answers += 1
+        
+        # Generate detailed explanations based on question content
+        explanation, why_wrong = generate_question_explanation(question_text, correct_answer, user_answer, options)
+        
+        question_feedback.append({
+            "question_id": question_id,
+            "question_text": question_text,
+            "options": options,
+            "user_answer": user_answer if user_answer != 'No answer provided' else None,
+            "correct_answer": correct_answer,
+            "is_correct": is_correct,
+            "explanation": explanation,
+            "why_wrong": why_wrong if not is_correct else None
+        })
+    
+    # Calculate scores
+    percentage = (correct_answers / total_questions * 100) if total_questions > 0 else 0
+    grade = calculate_grade(percentage)
+    
+    # Generate assessment feedback
+    assessment = generate_assessment_feedback(percentage, correct_answers, total_questions, topic)
+    
+    return {
+        "score": correct_answers * 10,  # Assuming 10 points per question
+        "total_questions": total_questions,
+        "correct_answers": correct_answers,
+        "percentage": round(percentage, 1),
+        "grade": grade,
+        "assessment": assessment,
+        "question_feedback": question_feedback,
+        "study_recommendations": generate_study_recommendations(topic, percentage),
+        "resources": generate_study_resources(topic)
+    }
+
+def generate_question_explanation(question_text, correct_answer, user_answer, options):
+    """Generate detailed explanations for specific questions"""
+    
+    explanations = {
+        'What is the first and most famous cryptocurrency?': {
+            'explanation': 'Bitcoin was the first cryptocurrency, created by Satoshi Nakamoto in 2009. It introduced the concept of decentralized digital currency and remains the most valuable and widely recognized cryptocurrency.',
+            'wrong_reasons': {
+                'A': 'Ethereum was created in 2015, several years after Bitcoin. While innovative with smart contracts, it was not the first cryptocurrency.',
+                'C': 'Litecoin was created in 2011 as a "lighter" version of Bitcoin, but came after Bitcoin.',
+                'D': 'Ripple (XRP) was developed later and focuses on banking solutions rather than being a general cryptocurrency.'
+            }
+        },
+        'What is a smart contract?': {
+            'explanation': 'A smart contract is a self-executing contract with terms directly written into code. It automatically executes when predetermined conditions are met, without requiring intermediaries.',
+            'wrong_reasons': {
+                'B': 'This describes a traditional legal contract, not a smart contract.',
+                'C': 'This describes a cryptocurrency wallet, not a smart contract.',
+                'D': 'This describes a mining process, not a smart contract.'
+            }
+        },
+        'What is a \'block\' in blockchain?': {
+            'explanation': 'A block is a collection of transaction data that is cryptographically linked to previous blocks, forming a chain. Each block contains a hash of the previous block, transaction data, and a timestamp.',
+            'wrong_reasons': {
+                'A': 'This describes a cryptocurrency unit, not a block.',
+                'B': 'This describes a mining reward, not a block structure.',
+                'D': 'This describes a wallet, not a block.'
+            }
+        },
+        'What makes blockchain secure?': {
+            'explanation': 'Blockchain security comes from cryptographic hashing, decentralization, and consensus mechanisms. Each block is cryptographically linked to the previous one, making tampering extremely difficult.',
+            'wrong_reasons': {
+                'B': 'Government regulation is external to blockchain technology itself.',
+                'C': 'Password protection is for individual accounts, not blockchain security.',
+                'D': 'Bank verification contradicts the decentralized nature of blockchain.'
+            }
+        },
+        'What is a consensus mechanism?': {
+            'explanation': 'A consensus mechanism is a protocol that ensures all nodes in a blockchain network agree on the validity of transactions and the current state of the ledger. Examples include Proof of Work and Proof of Stake.',
+            'wrong_reasons': {
+                'A': 'This describes a mining process, not consensus.',
+                'C': 'This describes a wallet feature, not consensus.',
+                'D': 'This describes a trading mechanism, not consensus.'
+            }
+        }
+    }
+    
+    # Get explanation for this question
+    question_info = explanations.get(question_text, {
+        'explanation': f'The correct answer is {correct_answer}. This is a fundamental concept in {question_text.lower()} that requires understanding of the underlying principles.',
+        'wrong_reasons': {}
+    })
+    
+    explanation = question_info['explanation']
+    wrong_reasons = question_info.get('wrong_reasons', {})
+    why_wrong = wrong_reasons.get(user_answer, f'Answer {user_answer} is incorrect. Please review the concept and try again.')
+    
+    return explanation, why_wrong
+
+def calculate_grade(percentage):
+    """Calculate letter grade based on percentage"""
+    if percentage >= 90:
+        return 'A+'
+    elif percentage >= 85:
+        return 'A'
+    elif percentage >= 80:
+        return 'A-'
+    elif percentage >= 75:
+        return 'B+'
+    elif percentage >= 70:
+        return 'B'
+    elif percentage >= 65:
+        return 'B-'
+    elif percentage >= 60:
+        return 'C+'
+    elif percentage >= 55:
+        return 'C'
+    elif percentage >= 50:
+        return 'C-'
+    else:
+        return 'F'
+
+def generate_assessment_feedback(percentage, correct_answers, total_questions, topic):
+    """Generate personalized assessment feedback"""
+    
+    if percentage >= 80:
+        strengths = [
+            "Excellent understanding of core concepts",
+            "Strong analytical thinking",
+            "Good grasp of technical details"
+        ]
+        areas_for_improvement = [
+            "Continue building on this solid foundation",
+            "Explore advanced applications",
+            "Stay updated with latest developments"
+        ]
+        overall_feedback = f"Outstanding performance! You demonstrate excellent understanding of {topic}. Keep up the great work and continue exploring advanced concepts."
+    
+    elif percentage >= 60:
+        strengths = [
+            "Good understanding of basic concepts",
+            "Shows promise in analytical thinking",
+            "Grasps fundamental principles"
+        ]
+        areas_for_improvement = [
+            "Review concepts where you struggled",
+            "Practice more complex problems",
+            "Strengthen understanding of technical details"
+        ]
+        overall_feedback = f"Good work! You have a solid foundation in {topic}, but there's room for improvement. Focus on the areas where you struggled and practice more."
+    
+    else:
+        strengths = [
+            "Shows interest in the subject",
+            "Attempting to engage with the material"
+        ]
+        areas_for_improvement = [
+            "Review fundamental concepts thoroughly",
+            "Seek additional learning resources",
+            "Practice basic problems before advancing",
+            "Consider getting help from a tutor or study group"
+        ]
+        overall_feedback = f"You're on the learning journey! {topic} can be challenging, but with focused study and practice, you can improve significantly. Don't get discouraged - everyone starts somewhere."
+    
+    return {
+        "strengths": strengths,
+        "areas_for_improvement": areas_for_improvement,
+        "overall_feedback": overall_feedback
+    }
+
+def generate_study_recommendations(topic, percentage):
+    """Generate personalized study recommendations"""
+    
+    base_recommendations = [
+        f"Review fundamental concepts of {topic}",
+        "Practice with additional quiz questions",
+        "Read authoritative sources on the subject"
+    ]
+    
+    if percentage < 60:
+        base_recommendations.extend([
+            "Start with basic introductory materials",
+            "Watch educational videos for visual learning",
+            "Join study groups or online communities",
+            "Consider seeking help from a tutor"
+        ])
+    elif percentage < 80:
+        base_recommendations.extend([
+            "Focus on areas where you lost points",
+            "Explore real-world applications",
+            "Practice explaining concepts to others"
+        ])
+    else:
+        base_recommendations.extend([
+            "Explore advanced topics and applications",
+            "Stay updated with latest developments",
+            "Consider teaching others to reinforce learning"
+        ])
+    
+    return base_recommendations
+
+def generate_study_resources(topic):
+    """Generate relevant study resources"""
+    
+    resources = [
+        {
+            "title": f"{topic.title()} Fundamentals",
+            "description": f"Comprehensive guide to understanding {topic}",
+            "type": "article"
+        },
+        {
+            "title": f"Interactive {topic.title()} Tutorial",
+            "description": f"Hands-on learning experience with {topic}",
+            "type": "tutorial"
+        },
+        {
+            "title": f"{topic.title()} Video Course",
+            "description": f"Visual learning approach to {topic} concepts",
+            "type": "video"
+        }
+    ]
+    
+    return resources

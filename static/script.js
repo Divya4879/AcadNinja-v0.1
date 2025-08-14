@@ -2338,14 +2338,14 @@ function showQuizResults(assessment) {
                 <h4 class="text-lg font-semibold text-high-contrast mb-4">📝 Question-by-Question Analysis</h4>
                 <div class="space-y-4">
                     ${assessment.question_feedback.map((feedback, index) => {
-                        const question = currentQuiz.questions[index];
-                        const userAnswer = userAnswers[question.id];
-                        const isCorrect = feedback.correct;
+                        const isCorrect = feedback.is_correct;
+                        const userAnswer = feedback.user_answer || 'No answer provided';
+                        const correctAnswer = feedback.correct_answer;
                         
                         return `
                         <div class="border border-white border-opacity-20 rounded-lg p-4 ${isCorrect ? 'border-green-500 border-opacity-30' : 'border-red-500 border-opacity-30'}">
                             <div class="flex justify-between items-center mb-3">
-                                <span class="font-medium text-high-contrast">Question ${index + 1}</span>
+                                <span class="font-medium text-high-contrast">Question ${feedback.question_id}</span>
                                 <span class="text-sm px-3 py-1 rounded-full ${isCorrect ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}">
                                     ${isCorrect ? '✅ Correct' : '❌ Incorrect'}
                                 </span>
@@ -2353,31 +2353,79 @@ function showQuizResults(assessment) {
                             
                             <!-- Question Text -->
                             <div class="mb-3">
-                                <p class="text-high-contrast font-medium mb-2">${sanitizeHtml(question.question)}</p>
+                                <p class="text-high-contrast font-medium mb-2">${sanitizeHtml(feedback.question_text)}</p>
                             </div>
                             
-                            ${currentQuiz.quiz_type === 'mcq' ? `
+                            ${feedback.options ? `
                                 <!-- MCQ Options -->
                                 <div class="space-y-2 mb-3">
-                                    ${question.options.map((option, optIndex) => {
-                                        const optionLetter = String.fromCharCode(65 + optIndex);
+                                    ${Object.entries(feedback.options).map(([optionLetter, optionText]) => {
                                         const isUserAnswer = userAnswer === optionLetter;
-                                        const isCorrectAnswer = question.correct_answer === optionLetter;
+                                        const isCorrectAnswer = correctAnswer === optionLetter;
                                         
-                                        let optionClass = 'bg-gray-700 text-gray-300';
+                                        let optionClass = 'bg-gray-700 text-gray-300 border-gray-600';
+                                        let statusIcon = '';
+                                        
                                         if (isCorrectAnswer) {
                                             optionClass = 'bg-green-600 text-white border-green-400';
+                                            statusIcon = ' <span class="text-green-200 font-bold">✓ Correct Answer</span>';
                                         } else if (isUserAnswer && !isCorrect) {
                                             optionClass = 'bg-red-600 text-white border-red-400';
+                                            statusIcon = ' <span class="text-red-200 font-bold">✗ Your Answer</span>';
                                         }
                                         
                                         return `
-                                            <div class="p-2 rounded border ${optionClass}">
-                                                <span class="font-medium">${optionLetter}.</span> ${sanitizeHtml(option)}
-                                                ${isCorrectAnswer ? ' <span class="text-green-200">✓ Correct Answer</span>' : ''}
-                                                ${isUserAnswer && !isCorrect ? ' <span class="text-red-200">✗ Your Answer</span>' : ''}
+                                            <div class="p-3 rounded border-2 ${optionClass}">
+                                                <span class="font-bold">${optionLetter}.</span> ${sanitizeHtml(optionText)}${statusIcon}
                                             </div>
                                         `;
+                                    }).join('')}
+                                </div>
+                            ` : `
+                                <!-- Subjective Answer -->
+                                <div class="mb-3">
+                                    <p class="text-gray-300 mb-2"><strong>Your Answer:</strong></p>
+                                    <div class="bg-gray-700 p-3 rounded border">
+                                        ${userAnswer !== 'No answer provided' ? sanitizeHtml(userAnswer) : '<em class="text-gray-400">No answer provided</em>'}
+                                    </div>
+                                </div>
+                            `}
+                            
+                            <!-- Answer Summary -->
+                            <div class="mb-4 p-3 rounded ${isCorrect ? 'bg-green-900 bg-opacity-30' : 'bg-red-900 bg-opacity-30'}">
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span class="text-gray-400">Your Answer:</span>
+                                        <span class="ml-2 font-medium ${isCorrect ? 'text-green-300' : 'text-red-300'}">
+                                            ${userAnswer}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Correct Answer:</span>
+                                        <span class="ml-2 font-medium text-green-300">${correctAnswer}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Detailed Explanation -->
+                            <div class="mb-3">
+                                <h5 class="text-sm font-semibold text-blue-300 mb-2">💡 Explanation:</h5>
+                                <p class="text-gray-300 text-sm leading-relaxed">${sanitizeHtml(feedback.explanation)}</p>
+                            </div>
+                            
+                            <!-- Why Wrong (if applicable) -->
+                            ${!isCorrect && feedback.why_wrong ? `
+                                <div class="mb-3">
+                                    <h5 class="text-sm font-semibold text-red-300 mb-2">❌ Why This Answer is Wrong:</h5>
+                                    <p class="text-gray-300 text-sm leading-relaxed">${sanitizeHtml(feedback.why_wrong)}</p>
+                                </div>
+                            ` : ''}
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        ` : ''}
                                     }).join('')}
                                 </div>
                             ` : `

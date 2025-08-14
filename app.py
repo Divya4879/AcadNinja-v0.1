@@ -8,7 +8,7 @@ import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from fallback_quiz import generate_fallback_quiz, generate_fallback_assessment
-from fallback_quiz_enhanced import generate_enhanced_fallback_quiz
+from fallback_quiz_enhanced import generate_enhanced_fallback_quiz, generate_enhanced_fallback_assessment
 
 # Load environment variables from .env file
 load_dotenv()
@@ -507,7 +507,7 @@ Format:
 
 @app.route('/api/assess-quiz', methods=['POST'])
 def assess_quiz():
-    """Assess quiz answers using Groq API"""
+    """Assess quiz answers using Groq API with detailed feedback"""
     try:
         data = request.json
         
@@ -523,61 +523,167 @@ def assess_quiz():
         
         print(f"Assessing {quiz_type} quiz for {subject} - {topic}")
         
-        # Create assessment prompt
+        # Create comprehensive assessment prompt
         if quiz_type == 'mcq':
-            assessment_prompt = f"""Assess this multiple-choice quiz on {topic} for a {academic_level} level student.
+            assessment_prompt = f"""You are an expert educator assessing a multiple-choice quiz on {topic} for a {academic_level} level student.
 
-Quiz Data: {json.dumps({'questions': quiz_data.get('questions', []), 'user_answers': user_answers}, indent=2)}
+QUIZ QUESTIONS AND USER ANSWERS:
+{json.dumps({'questions': quiz_data.get('questions', []), 'user_answers': user_answers}, indent=2)}
 
-You MUST respond with ONLY valid JSON. No other text, no markdown, no explanations.
+Provide a comprehensive assessment with detailed question-by-question feedback. For each question, include:
+1. The full question text
+2. All answer options (A, B, C, D)
+3. User's selected answer
+4. Correct answer
+5. Detailed explanation of why the correct answer is right
+6. Why other options are wrong
 
-{{
-  "score": 85,
-  "total_questions": 10,
-  "correct_answers": 8,
-  "percentage": 80,
-  "grade": "B+",
-  "assessment": {{
-    "strengths": ["Good understanding of basic concepts"],
-    "areas_for_improvement": ["Need to work on advanced topics"],
-    "overall_feedback": "Overall performance feedback"
-  }},
-  "question_feedback": [
-    {{
-      "question_id": 1,
-      "user_answer": "A",
-      "correct_answer": "B",
-      "is_correct": false,
-      "feedback": "Explanation of correct answer"
-    }}
-  ],
-  "resources": [
-    {{
-      "title": "Khan Academy - Topic Name",
-      "url": "https://khanacademy.org",
-      "description": "Great resource for this topic"
-    }}
-  ]
-}}"""
-        else:  # subjective
-            assessment_prompt = f"""Assess these subjective answers on {topic} for a {academic_level} level student.
-
-Quiz Data: {json.dumps({'questions': quiz_data.get('questions', []), 'user_answers': user_answers}, indent=2)}
-
-You MUST respond with ONLY valid JSON. No other text, no markdown, no explanations.
+You MUST respond with ONLY valid JSON in this exact format:
 
 {{
   "score": 85,
   "total_questions": 5,
-  "percentage": 85,
-  "grade": "A-",
+  "correct_answers": 4,
+  "percentage": 80,
+  "grade": "B+",
   "assessment": {{
-    "strengths": ["Clear explanations", "Good examples"],
-    "areas_for_improvement": ["More detail needed", "Better structure"],
-    "overall_feedback": "Overall performance feedback"
+    "strengths": ["Good understanding of basic concepts", "Strong analytical skills"],
+    "areas_for_improvement": ["Need to review advanced concepts", "Practice more complex problems"],
+    "overall_feedback": "You demonstrate solid foundational knowledge but should focus on strengthening areas where you struggled."
   }},
   "question_feedback": [
     {{
+      "question_id": 1,
+      "question_text": "What is the first and most famous cryptocurrency?",
+      "options": {{
+        "A": "Ethereum",
+        "B": "Bitcoin", 
+        "C": "Litecoin",
+        "D": "Ripple"
+      }},
+      "user_answer": "A",
+      "correct_answer": "B",
+      "is_correct": false,
+      "explanation": "Bitcoin was the first cryptocurrency, created by Satoshi Nakamoto in 2009. It remains the most famous and valuable cryptocurrency.",
+      "why_wrong": "Ethereum came later in 2015, though it introduced smart contracts."
+    }}
+  ],
+  "study_recommendations": [
+    "Review cryptocurrency history and major milestones",
+    "Study blockchain fundamentals and consensus mechanisms",
+    "Practice identifying key features of different cryptocurrencies"
+  ],
+  "resources": [
+    {{
+      "title": "Cryptocurrency Basics",
+      "description": "Comprehensive guide to understanding cryptocurrencies",
+      "type": "article"
+    }}
+  ]
+}}
+
+Ensure all question feedback includes the complete question text, all options, and detailed explanations."""
+
+        else:  # subjective
+            assessment_prompt = f"""You are an expert educator assessing subjective answers on {topic} for a {academic_level} level student.
+
+QUESTIONS AND USER ANSWERS:
+{json.dumps({'questions': quiz_data.get('questions', []), 'user_answers': user_answers}, indent=2)}
+
+Provide detailed feedback for each answer including what was good, what could be improved, and model answers.
+
+You MUST respond with ONLY valid JSON in this exact format:
+
+{{
+  "score": 85,
+  "total_questions": 3,
+  "percentage": 85,
+  "grade": "A-",
+  "assessment": {{
+    "strengths": ["Clear explanations", "Good use of examples", "Logical structure"],
+    "areas_for_improvement": ["More technical detail needed", "Better conclusion", "Include more recent developments"],
+    "overall_feedback": "Your answers show good understanding but could benefit from more depth and current examples."
+  }},
+  "question_feedback": [
+    {{
+      "question_id": 1,
+      "question_text": "Explain how blockchain technology works",
+      "user_answer": "User's actual answer text here",
+      "score": 7,
+      "max_score": 10,
+      "feedback": "Your explanation covers the basic concepts well. You correctly identified the key components like blocks, hashing, and decentralization. However, you could improve by explaining the consensus mechanism in more detail and providing a specific example of how transactions are validated.",
+      "model_answer": "A comprehensive model answer explaining blockchain technology...",
+      "suggestions": ["Add more detail about consensus mechanisms", "Include specific examples", "Explain cryptographic hashing"]
+    }}
+  ],
+  "study_recommendations": [
+    "Study consensus mechanisms in detail",
+    "Practice explaining technical concepts clearly",
+    "Review recent blockchain applications"
+  ]
+}}"""
+
+        # Make request to Groq API
+        headers = {
+            'Authorization': f'Bearer {GROQ_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'model': 'llama3-8b-8192',
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': 'You are an expert educator providing detailed quiz assessments. Always respond with valid JSON only.'
+                },
+                {
+                    'role': 'user',
+                    'content': assessment_prompt
+                }
+            ],
+            'max_tokens': 4000,
+            'temperature': 0.3
+        }
+        
+        session = create_http_session()
+        response = session.post(GROQ_API_URL, headers=headers, json=payload, timeout=(10, 30))
+        
+        if response.status_code == 200:
+            groq_response = response.json()
+            
+            if 'choices' in groq_response and len(groq_response['choices']) > 0:
+                ai_response = groq_response['choices'][0]['message']['content'].strip()
+                
+                try:
+                    # Parse the JSON response
+                    assessment_result = json.loads(ai_response)
+                    
+                    # Ensure we have the required structure
+                    if 'question_feedback' not in assessment_result:
+                        assessment_result['question_feedback'] = []
+                    
+                    return jsonify(assessment_result)
+                    
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error: {e}")
+                    print(f"AI Response: {ai_response[:500]}...")
+                    
+                    # Fallback to enhanced fallback assessment
+                    return jsonify(generate_enhanced_fallback_assessment(quiz_data, user_answers, quiz_type, subject, topic))
+            else:
+                return jsonify({'error': 'No response from AI model'}), 500
+        else:
+            print(f"Groq API error: {response.status_code} - {response.text}")
+            # Fallback to enhanced fallback assessment
+            return jsonify(generate_enhanced_fallback_assessment(quiz_data, user_answers, quiz_type, subject, topic))
+            
+    except Exception as e:
+        print(f"Assessment error: {str(e)}")
+        # Fallback to enhanced fallback assessment
+        try:
+            return jsonify(generate_enhanced_fallback_assessment(quiz_data, user_answers, quiz_type, subject, topic))
+        except:
+            return jsonify({'error': f'Failed to assess quiz: {str(e)}'}), 500
       "question_id": 1,
       "score": 8,
       "max_score": 10,
