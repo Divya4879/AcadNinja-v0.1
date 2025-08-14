@@ -131,6 +131,93 @@ def health_check():
         'environment': os.environ.get('RENDER_SERVICE_NAME', 'local')
     })
 
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """Handle chat requests for topic explanations"""
+    try:
+        if not GROQ_API_KEY:
+            return jsonify({
+                'status': 'error',
+                'error': 'Groq API key not configured'
+            }), 500
+
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({
+                'status': 'error',
+                'error': 'Message is required'
+            }), 400
+
+        message = data['message']
+        context = data.get('context', '')
+        
+        # Prepare the request to Groq API
+        headers = {
+            'Authorization': f'Bearer {GROQ_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'model': 'llama3-8b-8192',
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': f'You are an expert AI tutor. Context: {context}'
+                },
+                {
+                    'role': 'user',
+                    'content': message
+                }
+            ],
+            'max_tokens': 4000,
+            'temperature': 0.7
+        }
+        
+        # Create session and make request
+        session = create_http_session()
+        response = session.post(GROQ_API_URL, headers=headers, json=payload, timeout=(10, 30))
+        
+        if response.status_code == 200:
+            groq_response = response.json()
+            
+            if 'choices' in groq_response and len(groq_response['choices']) > 0:
+                ai_response = groq_response['choices'][0]['message']['content']
+                
+                return jsonify({
+                    'status': 'success',
+                    'response': ai_response,
+                    'model': groq_response.get('model', 'llama3-8b-8192'),
+                    'usage': groq_response.get('usage', {})
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'error': 'No response from AI model'
+                }), 500
+        else:
+            error_detail = response.text
+            return jsonify({
+                'status': 'error',
+                'error': f'Groq API error: {response.status_code}',
+                'detail': error_detail
+            }), response.status_code
+            
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'status': 'error',
+            'error': 'Request timeout - please try again'
+        }), 408
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            'status': 'error',
+            'error': f'Network error: {str(e)}'
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': f'Server error: {str(e)}'
+        }), 500
+
 @app.route('/api/generate-quiz', methods=['POST'])
 def generate_quiz():
     """Generate quiz questions using Groq API"""
