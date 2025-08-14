@@ -237,47 +237,129 @@ def generate_quiz():
         if not GROQ_API_KEY:
             return jsonify({'error': 'Groq API key not configured. Please set GROQ_API_KEY in your .env file'}), 500
         
-        print(f"Generating {quiz_type} quiz: {num_questions} questions for {subject} - {topic} (Difficulty: {difficulty})")
+        print(f"🎯 Generating {quiz_type} quiz: {num_questions} questions for {subject} - {topic} (Level: {academic_level}, Difficulty: {difficulty})")
         
-        # Create enhanced prompt based on quiz type
+        # Create comprehensive AI prompts for real-time generation
         if quiz_type == 'mcq':
-            system_prompt = f"""You are an internationally renowned educator and expert in {subject} at the {academic_level} level. You have deep expertise in {topic}.
+            system_prompt = f"""You are a world-class educator and subject matter expert in {subject}, specializing in {topic} at the {academic_level} academic level.
 
-Create EXACTLY {num_questions} multiple-choice questions about {topic} for {academic_level} level students with {difficulty} difficulty.
+MISSION: Generate EXACTLY {num_questions} unique, high-quality multiple-choice questions about {topic} that are perfectly suited for {academic_level} students at {difficulty} difficulty level.
 
-Context: {context}
+ACADEMIC LEVEL SPECIFICATIONS:
+- Primary (Ages 6-11): Simple language, concrete concepts, basic vocabulary, visual/practical examples
+- Secondary (Ages 12-18): Intermediate concepts, analytical thinking, real-world applications, some abstract reasoning
+- College (Ages 18-22): Advanced concepts, critical thinking, theoretical understanding, complex applications
+- Competitive (Professional): Expert-level, advanced problem-solving, cutting-edge concepts, industry applications
 
-Academic Level Guidelines:
-- Primary: Simple concepts, basic vocabulary, concrete examples
-- Secondary: Intermediate concepts, some abstract thinking, real-world applications
-- College: Advanced concepts, critical thinking, theoretical understanding
-- Competitive: Expert-level, complex problem-solving, advanced applications
+DIFFICULTY LEVEL SPECIFICATIONS:
+- Easy: Fundamental concepts, basic recall, simple understanding, straightforward applications
+- Medium: Concept application, analysis, connecting ideas, moderate problem-solving
+- Hard: Synthesis, evaluation, complex problem-solving, advanced applications, critical analysis
 
-Difficulty Guidelines:
-- Easy: Basic recall and understanding questions, fundamental concepts
-- Medium: Application and analysis questions, connecting concepts
-- Hard: Synthesis, evaluation, and complex problem-solving questions
+TOPIC EXPERTISE REQUIREMENTS:
+Generate questions that cover the most IMPORTANT and FUNDAMENTAL aspects of {topic} in {subject}:
+- Core principles and concepts
+- Key terminology and definitions  
+- Practical applications and examples
+- Common misconceptions to test understanding
+- Real-world relevance and implications
 
-CRITICAL REQUIREMENTS:
-- Generate EXACTLY {num_questions} questions - no more, no less
-- Questions must be appropriate for {academic_level} level students
-- All questions must be at {difficulty} difficulty level
+QUESTION QUALITY STANDARDS:
+- Each question must test genuine understanding, not just memorization
+- Questions should be unique and not repetitive
+- Cover different aspects/subtopics within {topic}
+- Include scenario-based questions where appropriate
+- Test both theoretical knowledge and practical application
+- Ensure questions are educationally valuable
+
+TECHNICAL REQUIREMENTS:
+- Generate EXACTLY {num_questions} questions (no more, no less)
 - Each question must have exactly 4 options (A, B, C, D)
-- Provide the correct answer for each question
-- Include detailed explanations for why the correct answer is right
-- Questions should test deep understanding, not just memorization
-- Make questions meaningful and educational
-- Ensure questions are clear, unambiguous, and well-structured
+- Only ONE correct answer per question
+- Provide detailed explanations for correct answers
+- Include brief explanations of why other options are incorrect
+- Questions must be clear, unambiguous, and grammatically correct
 
-You MUST respond with ONLY valid JSON. No other text, no markdown, no explanations outside the JSON.
-
-EXACT FORMAT REQUIRED:
+RESPONSE FORMAT - VALID JSON ONLY:
 {{
   "questions": [
     {{
       "id": 1,
-      "question": "What is [specific concept about {topic}]?",
+      "question": "[Detailed, specific question about {topic} appropriate for {academic_level} level]",
       "options": {{
+        "A": "[First detailed, plausible option]",
+        "B": "[Second detailed, plausible option]", 
+        "C": "[Third detailed, plausible option]",
+        "D": "[Fourth detailed, plausible option]"
+      }},
+      "correct_answer": "B",
+      "explanation": "[Comprehensive explanation of why B is correct and why A, C, D are incorrect]",
+      "difficulty": "{difficulty}",
+      "academic_level": "{academic_level}",
+      "subtopic": "[Specific aspect of {topic} this question covers]"
+    }}
+  ]
+}}
+
+CRITICAL: Respond with ONLY the JSON object. No additional text, markdown, or explanations."""
+
+        else:  # subjective questions
+            system_prompt = f"""You are a distinguished educator and assessment expert in {subject}, with deep expertise in {topic} at the {academic_level} academic level.
+
+MISSION: Generate EXACTLY {num_questions} unique, thought-provoking subjective questions about {topic} that are perfectly suited for {academic_level} students at {difficulty} difficulty level.
+
+ACADEMIC LEVEL SPECIFICATIONS:
+- Primary (Ages 6-11): Simple explanations, basic concepts, concrete examples, 2-3 sentences expected
+- Secondary (Ages 12-18): Structured explanations, analytical thinking, 1-2 paragraphs expected
+- College (Ages 18-22): In-depth analysis, critical thinking, theoretical understanding, 2-3 paragraphs expected
+- Competitive (Professional): Expert-level analysis, comprehensive explanations, 3-4 paragraphs expected
+
+DIFFICULTY LEVEL SPECIFICATIONS:
+- Easy: Basic explanations, simple concepts, straightforward descriptions
+- Medium: Analysis and application, connecting concepts, moderate complexity
+- Hard: Critical evaluation, synthesis, complex problem-solving, advanced reasoning
+
+SUBJECTIVE QUESTION TYPES:
+- Explain concepts and principles
+- Analyze scenarios and case studies
+- Compare and contrast different approaches
+- Evaluate advantages and disadvantages
+- Describe processes and procedures
+- Justify opinions with reasoning
+- Apply knowledge to new situations
+
+QUESTION QUALITY STANDARDS:
+- Questions should encourage deep thinking and understanding
+- Test ability to explain, analyze, and synthesize information
+- Cover important aspects of {topic} comprehensively
+- Require students to demonstrate genuine understanding
+- Include real-world applications where relevant
+- Encourage critical thinking and reasoning
+
+TECHNICAL REQUIREMENTS:
+- Generate EXACTLY {num_questions} questions (no more, no less)
+- Each question should be open-ended and thought-provoking
+- Provide expected answer length guidelines
+- Include key points that should be covered in answers
+- Provide comprehensive model answers for reference
+
+RESPONSE FORMAT - VALID JSON ONLY:
+{{
+  "questions": [
+    {{
+      "id": 1,
+      "question": "[Detailed, thought-provoking question about {topic} appropriate for {academic_level} level]",
+      "expected_length": "[Expected response length: e.g., '2-3 sentences', '1-2 paragraphs', '3-4 paragraphs']",
+      "key_points": ["Key point 1 that should be covered", "Key point 2 that should be covered", "Key point 3 that should be covered"],
+      "model_answer": "[Comprehensive model answer demonstrating expected depth and quality]",
+      "difficulty": "{difficulty}",
+      "academic_level": "{academic_level}",
+      "subtopic": "[Specific aspect of {topic} this question covers]"
+    }}
+  ]
+}}
+
+CRITICAL: Respond with ONLY the JSON object. No additional text, markdown, or explanations."""
         "A": "First detailed option",
         "B": "Second detailed option", 
         "C": "Third detailed option",
@@ -324,18 +406,32 @@ Format:
   ]
 }}"""
         
-        # Make enhanced request to Groq API
+        # Enhanced API call for real-time AI generation
         headers = {
             'Authorization': f'Bearer {GROQ_API_KEY}',
             'Content-Type': 'application/json'
         }
         
         payload = {
-            'model': 'llama3-8b-8192',
+            'model': 'llama3-70b-8192',  # Use more powerful model for better quality
             'messages': [
                 {
                     'role': 'system',
-                    'content': f'You are an expert educator. Generate EXACTLY {num_questions} high-quality questions. Always respond with valid JSON only. No markdown, no extra text.'
+                    'content': f'You are a world-class educator and subject matter expert. Generate EXACTLY {num_questions} unique, high-quality {quiz_type} questions about {topic} in {subject} for {academic_level} level at {difficulty} difficulty. Respond with ONLY valid JSON.'
+                },
+                {
+                    'role': 'user',
+                    'content': system_prompt
+                }
+            ],
+            'max_tokens': 6000,  # Increased for comprehensive questions
+            'temperature': 0.8,  # Higher creativity for unique questions
+            'top_p': 0.95,      # Better diversity
+            'frequency_penalty': 0.3,  # Reduce repetition
+            'presence_penalty': 0.2    # Encourage new topics
+        }
+        
+        print(f"🤖 Making enhanced Groq API call for {num_questions} unique {quiz_type} questions...")
                 },
                 {
                     'role': 'user',
@@ -355,53 +451,120 @@ Format:
             GROQ_API_URL, 
             headers=headers, 
             json=payload, 
-            timeout=(10, 60)  # Increased timeout
+            timeout=(15, 90)  # Increased timeout for complex generation
         )
         
         if response.status_code == 200:
             result = response.json()
             content = result['choices'][0]['message']['content'].strip()
             
-            print(f"Raw API response length: {len(content)}")
-            print(f"Raw API response preview: {content[:200]}...")
+            print(f"✅ Received AI response: {len(content)} characters")
+            print(f"📝 Response preview: {content[:200]}...")
             
-            # Clean up the content - remove any markdown formatting
+            # Enhanced content cleaning for better JSON parsing
             if content.startswith('```json'):
                 content = content.replace('```json', '').replace('```', '').strip()
             elif content.startswith('```'):
                 content = content.replace('```', '').strip()
             
-            # Try to extract JSON from the content
+            # Remove any leading/trailing text that might not be JSON
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+            if json_start != -1 and json_end != -1:
+                content = content[json_start:json_end]
+            
+            # Try to extract and validate JSON
             try:
-                # First, try direct parsing
                 quiz_data = json.loads(content)
                 
-                # Validate the structure
+                # Comprehensive validation
                 if 'questions' not in quiz_data or not isinstance(quiz_data['questions'], list):
                     raise ValueError("Invalid quiz structure - missing questions array")
                 
-                if len(quiz_data['questions']) == 0:
-                    raise ValueError("No questions generated")
+                questions = quiz_data['questions']
+                if len(questions) == 0:
+                    raise ValueError("No questions generated by AI")
                 
-                # Validate each question
-                for i, question in enumerate(quiz_data['questions']):
-                    if 'question' not in question:
-                        raise ValueError(f"Question {i+1} missing 'question' field")
+                print(f"🎯 AI generated {len(questions)} questions (requested: {num_questions})")
+                
+                # Enhanced question validation and processing
+                validated_questions = []
+                for i, question in enumerate(questions):
+                    if 'question' not in question or not question['question'].strip():
+                        print(f"⚠️ Skipping question {i+1}: missing or empty question text")
+                        continue
                     
-                    # Add ID if missing
-                    if 'id' not in question:
-                        question['id'] = i + 1
+                    # Standardize question structure
+                    validated_question = {
+                        'id': question.get('id', i + 1),
+                        'question': question['question'].strip(),
+                        'difficulty': question.get('difficulty', difficulty),
+                        'academic_level': question.get('academic_level', academic_level),
+                        'subtopic': question.get('subtopic', topic)
+                    }
                     
-                    # Add difficulty if missing
-                    if 'difficulty' not in question:
-                        question['difficulty'] = difficulty
-                    
-                    # Validate MCQ structure
+                    # Type-specific validation and processing
                     if quiz_type == 'mcq':
-                        if 'options' not in question:
-                            raise ValueError(f"MCQ question {i+1} missing 'options' field")
+                        if 'options' not in question or not isinstance(question['options'], dict):
+                            print(f"⚠️ Skipping MCQ question {i+1}: missing or invalid options")
+                            continue
+                        
                         if 'correct_answer' not in question:
-                            raise ValueError(f"MCQ question {i+1} missing 'correct_answer' field")
+                            print(f"⚠️ Skipping MCQ question {i+1}: missing correct answer")
+                            continue
+                        
+                        # Ensure we have exactly 4 options
+                        options = question['options']
+                        if len(options) < 4:
+                            # Fill missing options
+                            option_keys = ['A', 'B', 'C', 'D']
+                            for key in option_keys:
+                                if key not in options:
+                                    options[key] = f"Option {key}"
+                        
+                        validated_question.update({
+                            'options': options,
+                            'correct_answer': question['correct_answer'],
+                            'explanation': question.get('explanation', f"The correct answer is {question['correct_answer']}.")
+                        })
+                    
+                    else:  # subjective questions
+                        validated_question.update({
+                            'expected_length': question.get('expected_length', '2-3 paragraphs'),
+                            'key_points': question.get('key_points', [f"Key concepts about {topic}"]),
+                            'model_answer': question.get('model_answer', f"A comprehensive answer should cover the main aspects of {topic}.")
+                        })
+                    
+                    validated_questions.append(validated_question)
+                
+                # Ensure we have the requested number of questions
+                if len(validated_questions) < num_questions:
+                    print(f"⚠️ Only {len(validated_questions)} valid questions generated, need {num_questions}")
+                    # We'll handle this in the frontend fallback
+                
+                # Trim to exact count if we have too many
+                validated_questions = validated_questions[:num_questions]
+                
+                quiz_result = {
+                    'questions': validated_questions,
+                    'total_questions': len(validated_questions),
+                    'subject': subject,
+                    'topic': topic,
+                    'difficulty': difficulty,
+                    'academic_level': academic_level,
+                    'quiz_type': quiz_type,
+                    'generated_by': 'groq_ai',
+                    'generation_timestamp': datetime.now().isoformat()
+                }
+                
+                print(f"✅ Successfully processed {len(validated_questions)} AI-generated questions")
+                
+                return jsonify({
+                    'success': True,
+                    'quiz': quiz_result,
+                    'source': 'groq_ai_realtime',
+                    'message': f'Generated {len(validated_questions)} unique {quiz_type} questions using AI'
+                })
                 
                 print(f"✅ Successfully generated {len(quiz_data['questions'])} questions via AI")
                 return jsonify({

@@ -1178,107 +1178,120 @@ function calculateTrend(scores) {
 /**
  * Generate quiz using API
  */
+/**
+ * Generate quiz using ONLY Groq AI API - No fallbacks, pure AI generation
+ */
 async function generateQuiz(subject, topic, academicLevel, quizType, numQuestions, context = '', difficulty = 'medium') {
     try {
-        console.log('🎯 Generating quiz with params:', { subject, topic, academicLevel, quizType, numQuestions, difficulty });
+        console.log('🤖 Generating PURE AI quiz:', { subject, topic, academicLevel, quizType, numQuestions, difficulty });
         
-        const response = await fetch('/api/generate-quiz', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                subject: subject,
-                topic: topic,
-                academicLevel: academicLevel,
-                quizType: quizType,
-                numQuestions: parseInt(numQuestions), // Ensure it's a number
-                context: context,
-                difficulty: difficulty
-            })
-        });
-
-        let data;
-        try {
-            data = await response.json();
-        } catch (parseError) {
-            console.error('❌ Failed to parse response as JSON:', parseError);
-            throw new Error('Server returned invalid response format');
-        }
-
-        console.log('📥 API Response:', data);
-
-        if (response.ok && data.success && data.quiz && data.quiz.questions) {
-            const receivedQuestions = data.quiz.questions.length;
-            console.log(`✅ Received ${receivedQuestions} questions, requested ${numQuestions}`);
+        // First attempt - Primary AI call
+        let quiz = await makeGroqAPICall(subject, topic, academicLevel, quizType, numQuestions, difficulty, context);
+        
+        // If we didn't get enough questions, make additional calls
+        if (quiz && quiz.questions && quiz.questions.length < numQuestions) {
+            console.log(`🔄 Need ${numQuestions - quiz.questions.length} more questions. Making additional AI calls...`);
             
-            // CRITICAL FIX: Ensure we have EXACTLY the requested number of questions
-            if (receivedQuestions < numQuestions) {
-                console.log(`🔄 Need ${numQuestions - receivedQuestions} more questions. Generating additional...`);
+            const additionalNeeded = numQuestions - quiz.questions.length;
+            const additionalContext = `Generate ${additionalNeeded} additional unique questions about ${topic}. Make them different from previous questions and cover different aspects of the topic.`;
+            
+            // Make additional AI calls until we have enough questions
+            let attempts = 0;
+            while (quiz.questions.length < numQuestions && attempts < 3) {
+                attempts++;
+                console.log(`🤖 Additional AI call attempt ${attempts}...`);
                 
-                // Generate additional questions using the same API call
-                const additionalResponse = await fetch('/api/generate-quiz', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        subject: subject,
-                        topic: topic,
-                        academicLevel: academicLevel,
-                        quizType: quizType,
-                        numQuestions: numQuestions - receivedQuestions,
-                        context: `Additional questions for ${topic}. Make them different from previous questions.`,
-                        difficulty: difficulty
-                    })
-                });
-                
-                if (additionalResponse.ok) {
-                    const additionalData = await additionalResponse.json();
-                    if (additionalData.success && additionalData.quiz && additionalData.quiz.questions) {
-                        // Combine questions with proper IDs
-                        const additionalQuestions = additionalData.quiz.questions.map((q, index) => ({
+                try {
+                    const additionalQuiz = await makeGroqAPICall(
+                        subject, topic, academicLevel, quizType, 
+                        additionalNeeded, difficulty, additionalContext
+                    );
+                    
+                    if (additionalQuiz && additionalQuiz.questions) {
+                        // Add new questions with proper IDs
+                        const newQuestions = additionalQuiz.questions.map((q, index) => ({
                             ...q,
-                            id: receivedQuestions + index + 1
+                            id: quiz.questions.length + index + 1
                         }));
-                        data.quiz.questions = [...data.quiz.questions, ...additionalQuestions];
-                        console.log(`✅ Added ${additionalQuestions.length} additional questions`);
+                        
+                        quiz.questions = [...quiz.questions, ...newQuestions];
+                        console.log(`✅ Added ${newQuestions.length} more AI questions. Total: ${quiz.questions.length}`);
                     }
-                }
-                
-                // If still not enough, use enhanced fallback
-                if (data.quiz.questions.length < numQuestions) {
-                    const stillNeeded = numQuestions - data.quiz.questions.length;
-                    const fallbackQuestions = generateEnhancedFallbackQuestions(subject, topic, stillNeeded, difficulty, academicLevel);
-                    data.quiz.questions = [...data.quiz.questions, ...fallbackQuestions];
+                } catch (error) {
+                    console.warn(`⚠️ Additional AI call ${attempts} failed:`, error);
                 }
             }
-            
-            // Ensure we have exactly the requested number
-            data.quiz.questions = data.quiz.questions.slice(0, numQuestions);
-            
-            // Validate and enhance each question
-            data.quiz.questions = data.quiz.questions.map((q, index) => ({
-                id: index + 1,
-                question: q.question || `Question ${index + 1} about ${topic}`,
-                options: q.options || generateOptionsForTopic(topic, subject),
-                correct_answer: q.correct_answer || q.correct || 'A',
-                explanation: q.explanation || `This question tests understanding of ${topic} concepts.`,
-                difficulty: difficulty,
-                source: q.source || 'groq_ai'
-            }));
-            
-            console.log(`🎉 Successfully generated ${data.quiz.questions.length} questions from ${data.source || 'groq_ai'}`);
-            return data.quiz;
-        } else {
-            console.warn('⚠️ API response invalid, using enhanced fallback');
-            return generateEnhancedFallbackQuiz(subject, topic, quizType, numQuestions, difficulty, academicLevel);
         }
+        
+        // Ensure we have exactly the requested number
+        if (quiz && quiz.questions) {
+            quiz.questions = quiz.questions.slice(0, numQuestions);
+            quiz.total_questions = quiz.questions.length;
+            
+            console.log(`🎉 Successfully generated ${quiz.questions.length} pure AI questions`);
+            return quiz;
+        } else {
+            throw new Error('AI failed to generate any questions');
+        }
+        
     } catch (error) {
-        console.error('❌ Quiz generation error:', error);
-        console.log('🔄 Using enhanced fallback quiz generation');
-        return generateEnhancedFallbackQuiz(subject, topic, quizType, numQuestions, difficulty, academicLevel);
+        console.error('❌ Pure AI quiz generation failed:', error);
+        
+        // Last resort: Try one more time with simplified prompt
+        console.log('🔄 Attempting simplified AI generation...');
+        try {
+            return await makeSimplifiedGroqAPICall(subject, topic, academicLevel, quizType, numQuestions, difficulty);
+        } catch (finalError) {
+            console.error('❌ All AI generation attempts failed:', finalError);
+            showNotification('AI quiz generation failed. Please try again.', 'error');
+            throw finalError;
+        }
     }
+}
+
+/**
+ * Make Groq API call for quiz generation
+ */
+async function makeGroqAPICall(subject, topic, academicLevel, quizType, numQuestions, difficulty, context) {
+    const response = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            subject: subject,
+            topic: topic,
+            academicLevel: academicLevel,
+            quizType: quizType,
+            numQuestions: parseInt(numQuestions),
+            context: context,
+            difficulty: difficulty
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('📥 AI API Response:', data);
+
+    if (data.success && data.quiz && data.quiz.questions) {
+        return data.quiz;
+    } else {
+        throw new Error(data.message || 'Invalid API response');
+    }
+}
+
+/**
+ * Simplified AI call as last resort
+ */
+async function makeSimplifiedGroqAPICall(subject, topic, academicLevel, quizType, numQuestions, difficulty) {
+    console.log('🔧 Making simplified AI call...');
+    
+    const simplifiedContext = `Generate ${numQuestions} ${quizType} questions about ${topic} in ${subject} for ${academicLevel} students at ${difficulty} level. Focus on the most important concepts.`;
+    
+    return await makeGroqAPICall(subject, topic, academicLevel, quizType, numQuestions, difficulty, simplifiedContext);
 }
 
 /**
@@ -1404,9 +1417,84 @@ async function assessQuiz(quiz, answers, quizType, subject, topic, academicLevel
 }
 
 /**
- * Generate enhanced fallback quiz with academic-level questions
+ * Enhanced subjective question display for AI-generated questions
  */
-function generateEnhancedFallbackQuiz(subject, topic, quizType, numQuestions, difficulty, academicLevel) {
+function showSubjectiveQuestion(question, questionIndex) {
+    const container = document.getElementById('quiz-questions-content');
+    if (!container) return;
+    
+    const savedAnswer = userAnswers[question.id] || '';
+    
+    container.innerHTML = `
+        <div class="question-card bg-gray-800 p-6 rounded-lg border border-gray-700">
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-medium-contrast">Question ${questionIndex + 1} of ${currentQuiz.questions.length}</span>
+                    <span class="text-xs px-2 py-1 bg-blue-600 text-white rounded">${question.difficulty || 'medium'}</span>
+                </div>
+                ${question.subtopic ? `<p class="text-xs text-low-contrast mb-2">Topic: ${sanitizeHtml(question.subtopic)}</p>` : ''}
+            </div>
+            
+            <h3 class="text-lg font-semibold text-high-contrast mb-4">
+                ${sanitizeHtml(question.question)}
+            </h3>
+            
+            ${question.expected_length ? `
+                <div class="mb-4 p-3 bg-blue-900 bg-opacity-20 border border-blue-600 border-opacity-30 rounded-lg">
+                    <p class="text-sm text-blue-300">
+                        <strong>Expected Length:</strong> ${sanitizeHtml(question.expected_length)}
+                    </p>
+                </div>
+            ` : ''}
+            
+            ${question.key_points && question.key_points.length > 0 ? `
+                <div class="mb-4 p-3 bg-green-900 bg-opacity-20 border border-green-600 border-opacity-30 rounded-lg">
+                    <p class="text-sm text-green-300 mb-2"><strong>Key Points to Cover:</strong></p>
+                    <ul class="text-sm text-green-200 list-disc list-inside space-y-1">
+                        ${question.key_points.map(point => `<li>${sanitizeHtml(point)}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
+            <div class="mb-6">
+                <textarea id="subjective-answer-${question.id}"
+                          class="w-full h-48 bg-gray-700 border border-gray-600 rounded-lg p-4 text-high-contrast resize-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                          placeholder="Write your comprehensive answer here. Be sure to address the key points mentioned above..."
+                          onchange="selectAnswer(${question.id}, this.value)">${sanitizeHtml(savedAnswer)}</textarea>
+                <div class="text-sm text-medium-contrast mt-2 flex justify-between">
+                    <span>Take your time to provide a thoughtful, detailed response.</span>
+                    <span id="char-count-${question.id}" class="text-low-contrast">0 characters</span>
+                </div>
+            </div>
+            
+            <div class="flex justify-between">
+                <button onclick="previousQuestion()" 
+                        class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors ${questionIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                        ${questionIndex === 0 ? 'disabled' : ''}>
+                    ← Previous
+                </button>
+                
+                <button onclick="nextQuestion()" 
+                        class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    ${questionIndex === currentQuiz.questions.length - 1 ? 'Finish Quiz' : 'Next →'}
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Add character counter
+    const textarea = document.getElementById(`subjective-answer-${question.id}`);
+    const charCount = document.getElementById(`char-count-${question.id}`);
+    
+    if (textarea && charCount) {
+        const updateCharCount = () => {
+            charCount.textContent = `${textarea.value.length} characters`;
+        };
+        
+        textarea.addEventListener('input', updateCharCount);
+        updateCharCount(); // Initial count
+    }
+}
     console.log(`🔧 Generating enhanced fallback quiz: ${numQuestions} questions for ${subject} - ${topic} (${academicLevel} level)`);
     
     // Academic-level question database
@@ -1574,116 +1662,8 @@ function generateEnhancedFallbackQuiz(subject, topic, quizType, numQuestions, di
         source: 'enhanced_fallback'
     }));
     
-    console.log(`✅ Generated ${formattedQuestions.length} enhanced fallback questions for ${academicLevel} level`);
-    
-    return {
-        questions: formattedQuestions,
-        title: `${subject} - ${topic} Quiz (${academicLevel} Level)`,
-        subject: subject,
-        topic: topic,
-        difficulty: difficulty,
-        academic_level: academicLevel,
-        quiz_type: quizType,
-        total_questions: formattedQuestions.length,
-        source: 'enhanced_fallback'
-    };
-}
-
 /**
- * Generate academic-appropriate question
- */
-function generateAcademicQuestion(subject, topic, academicLevel, difficulty, questionNum) {
-    const questionTemplates = {
-        'Primary': {
-            question: `What is a simple way to understand ${topic}? (Question ${questionNum})`,
-            options: {
-                A: `${topic} is very complicated`,
-                B: `${topic} is a basic concept in ${subject}`,
-                C: `${topic} is not important`,
-                D: `${topic} is only for experts`
-            },
-            correct_answer: 'B',
-            explanation: `At the primary level, ${topic} should be understood as a fundamental concept in ${subject} that forms the basis for more advanced learning.`
-        },
-        'Secondary': {
-            question: `Which statement best describes ${topic} in ${subject}? (Question ${questionNum})`,
-            options: {
-                A: `${topic} is an outdated concept`,
-                B: `${topic} is a key principle that students should master`,
-                C: `${topic} is only theoretical`,
-                D: `${topic} has no practical applications`
-            },
-            correct_answer: 'B',
-            explanation: `At the secondary level, ${topic} is a key principle in ${subject} that students should master to build a strong foundation for advanced studies.`
-        },
-        'College': {
-            question: `From an analytical perspective, how does ${topic} contribute to the field of ${subject}? (Question ${questionNum})`,
-            options: {
-                A: `${topic} provides foundational understanding and practical applications`,
-                B: `${topic} is purely theoretical with no real-world use`,
-                C: `${topic} is being replaced by newer concepts`,
-                D: `${topic} is only relevant in academic settings`
-            },
-            correct_answer: 'A',
-            explanation: `At the college level, ${topic} provides both foundational understanding and practical applications that are essential for professional competency in ${subject}.`
-        },
-        'Competitive': {
-            question: `In competitive examinations, ${topic} in ${subject} is often tested through which approach? (Question ${questionNum})`,
-            options: {
-                A: `Complex problem-solving and application-based scenarios`,
-                B: `Simple definition recall`,
-                C: `Multiple choice only`,
-                D: `Theoretical explanations only`
-            },
-            correct_answer: 'A',
-            explanation: `Competitive exams test ${topic} through complex problem-solving and application-based scenarios that require deep understanding and analytical skills.`
-        }
-    };
-    
-    return questionTemplates[academicLevel] || questionTemplates['College'];
-}
-
-/**
- * Generate enhanced fallback questions for specific count
- */
-function generateEnhancedFallbackQuestions(subject, topic, count, difficulty, academicLevel) {
-    const questions = [];
-    for (let i = 0; i < count; i++) {
-        questions.push(generateAcademicQuestion(subject, topic, academicLevel, difficulty, i + 1));
-    }
-    return questions;
-}
-
-/**
- * Generate appropriate options for topic
- */
-function generateOptionsForTopic(topic, subject) {
-    const topicOptions = {
-        'Blockchain': {
-            A: 'Centralized database system',
-            B: 'Decentralized ledger technology',
-            C: 'Traditional banking system',
-            D: 'Social media platform'
-        },
-        'Cryptocurrency': {
-            A: 'Physical currency',
-            B: 'Digital currency using cryptography',
-            C: 'Credit card system',
-            D: 'Bank transfer method'
-        },
-        'Programming': {
-            A: 'Hardware component',
-            B: 'Software development process',
-            C: 'Network protocol',
-            D: 'Database system'
-        }
-    };
-    
-    return topicOptions[topic] || topicOptions['Blockchain'];
-}
-    
-/**
- * Generate fallback assessment when API fails
+ * Generate fallback assessment when API fails (kept for assessment only)
  */
 function generateFallbackAssessment(quiz, answers, quizType, subject, topic) {
     const questions = quiz.questions || [];
@@ -2670,32 +2650,53 @@ function showQuestion(index) {
     let questionHTML = '';
     
     if (quizType === 'mcq') {
-        // Multiple choice question
+        // Enhanced Multiple choice question display for AI-generated content
         const options = Object.entries(question.options || {}).map(([key, value]) => `
-            <button class="option-button" onclick="selectMCQAnswer(${index}, '${key}')">
-                <strong>${key})</strong> ${sanitizeHtml(value)}
+            <button class="option-button w-full text-left p-4 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg transition-colors mb-2" 
+                    onclick="selectMCQAnswer(${index}, '${key}')">
+                <div class="flex items-start">
+                    <span class="font-bold text-teal-400 mr-3 mt-1">${key})</span>
+                    <span class="text-high-contrast flex-1">${sanitizeHtml(value)}</span>
+                </div>
             </button>
         `).join('');
         
         questionHTML = `
-            <div class="question-card">
-                <div class="flex justify-between items-center mb-4">
-                    <span class="text-sm text-medium-contrast">Question ${index + 1} of ${currentQuiz.questions.length}</span>
-                    <span class="text-xs px-2 py-1 bg-white bg-opacity-10 rounded">${question.difficulty || 'medium'}</span>
+            <div class="question-card bg-gray-800 p-6 rounded-lg border border-gray-700">
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm text-medium-contrast">Question ${index + 1} of ${currentQuiz.questions.length}</span>
+                        <div class="flex gap-2">
+                            ${question.subtopic ? `<span class="text-xs px-2 py-1 bg-purple-600 text-white rounded">${sanitizeHtml(question.subtopic)}</span>` : ''}
+                            <span class="text-xs px-2 py-1 bg-blue-600 text-white rounded">${question.difficulty || 'medium'}</span>
+                        </div>
+                    </div>
+                    ${question.academic_level ? `<p class="text-xs text-low-contrast">Level: ${sanitizeHtml(question.academic_level)}</p>` : ''}
                 </div>
                 
-                <h3 class="text-lg font-semibold text-high-contrast mb-6">${sanitizeHtml(question.question)}</h3>
+                <h3 class="text-lg font-semibold text-high-contrast mb-6 leading-relaxed">${sanitizeHtml(question.question)}</h3>
                 
-                <div class="space-y-2 mb-6">
+                <div class="mb-6">
                     ${options}
                 </div>
                 
+                ${question.explanation && userAnswers[index] ? `
+                    <div class="mb-4 p-4 bg-blue-900 bg-opacity-20 border border-blue-600 border-opacity-30 rounded-lg">
+                        <p class="text-sm text-blue-300">
+                            <strong>💡 Explanation:</strong> ${sanitizeHtml(question.explanation)}
+                        </p>
+                    </div>
+                ` : ''}
+                
                 <div class="flex justify-between">
-                    <button onclick="previousQuestion()" class="bg-gray-600 hover:bg-gray-700 text-high-contrast px-4 py-2 rounded-lg font-medium transition-colors" ${index === 0 ? 'disabled' : ''}>
-                        Previous
+                    <button onclick="previousQuestion()" 
+                            class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium transition-colors ${index === 0 ? 'opacity-50 cursor-not-allowed' : ''}" 
+                            ${index === 0 ? 'disabled' : ''}>
+                        ← Previous
                     </button>
-                    <button id="next-question-btn" onclick="nextQuestion()" class="bg-teal-600 hover:bg-teal-700 text-high-contrast px-4 py-2 rounded-lg font-medium transition-colors" disabled>
-                        ${index === currentQuiz.questions.length - 1 ? 'Finish Quiz' : 'Next'}
+                    <button id="next-question-btn" onclick="nextQuestion()" 
+                            class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg font-medium transition-colors" disabled>
+                        ${index === currentQuiz.questions.length - 1 ? 'Finish Quiz' : 'Next →'}
                     </button>
                 </div>
             </div>
