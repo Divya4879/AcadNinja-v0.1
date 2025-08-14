@@ -5,6 +5,7 @@ import os
 import json
 import requests
 import urllib3
+from datetime import datetime
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from fallback_quiz import generate_fallback_quiz, generate_fallback_assessment
@@ -504,6 +505,140 @@ Format:
                 })
             except:
                 return jsonify({'error': f'Failed to generate quiz: {str(e)}'}), 500
+
+@app.route('/api/explain-topic', methods=['POST'])
+def explain_topic():
+    """Generate real-time AI explanation for any topic"""
+    try:
+        data = request.json
+        
+        topic = data.get('topic', '')
+        subject = data.get('subject', '')
+        academic_level = data.get('academicLevel', 'Secondary')
+        context = data.get('context', '')
+        explanation_type = data.get('type', 'comprehensive')  # comprehensive, quick, detailed
+        
+        if not GROQ_API_KEY:
+            return jsonify({'error': 'Groq API key not configured'}), 500
+        
+        if not topic:
+            return jsonify({'error': 'Topic is required'}), 400
+        
+        print(f"Generating AI explanation for {topic} in {subject}")
+        
+        # Create explanation prompt based on type
+        if explanation_type == 'comprehensive':
+            system_prompt = f"""You are an expert educator specializing in {subject} at the {academic_level} level.
+
+Provide a comprehensive, in-depth explanation of "{topic}" that includes:
+
+1. **Clear Definition**: What is {topic}? Provide a clear, concise definition.
+
+2. **Core Concepts**: Break down the fundamental concepts and principles.
+
+3. **How It Works**: Explain the mechanisms, processes, or functionality in detail.
+
+4. **Real-World Applications**: Provide concrete examples and use cases.
+
+5. **Benefits and Advantages**: Why is this important? What problems does it solve?
+
+6. **Challenges and Limitations**: What are the current challenges or limitations?
+
+7. **Future Implications**: Where is this technology/concept heading?
+
+8. **Key Takeaways**: Summarize the most important points students should remember.
+
+Context: {context}
+
+Requirements:
+- Write for {academic_level} level students
+- Use clear, engaging language
+- Include specific examples
+- Make it educational and informative
+- Aim for 2000-3000 words
+- Use proper formatting with headers and bullet points
+- Be accurate and up-to-date
+
+Provide a comprehensive explanation that will help students truly understand {topic}."""
+
+        elif explanation_type == 'quick':
+            system_prompt = f"""You are an expert educator. Provide a quick, clear explanation of "{topic}" in {subject} for {academic_level} level students.
+
+Include:
+- Clear definition (2-3 sentences)
+- Key points (3-5 bullet points)
+- Simple example
+- Why it matters
+
+Keep it concise but informative (300-500 words).
+
+Context: {context}"""
+
+        else:  # detailed
+            system_prompt = f"""You are an expert educator. Provide a detailed technical explanation of "{topic}" in {subject} for {academic_level} level students.
+
+Include:
+- Technical definition and background
+- Detailed mechanisms and processes
+- Multiple examples and case studies
+- Technical specifications where relevant
+- Current research and developments
+- Practical applications
+
+Aim for 1500-2000 words with technical depth appropriate for {academic_level} level.
+
+Context: {context}"""
+        
+        # Make request to Groq API
+        headers = {
+            'Authorization': f'Bearer {GROQ_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'model': 'llama3-8b-8192',
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': 'You are an expert educator. Provide clear, accurate, and engaging explanations.'
+                },
+                {
+                    'role': 'user',
+                    'content': system_prompt
+                }
+            ],
+            'max_tokens': 4000,
+            'temperature': 0.7
+        }
+        
+        session = create_http_session()
+        response = session.post(GROQ_API_URL, headers=headers, json=payload, timeout=(10, 30))
+        
+        if response.status_code == 200:
+            groq_response = response.json()
+            
+            if 'choices' in groq_response and len(groq_response['choices']) > 0:
+                explanation = groq_response['choices'][0]['message']['content'].strip()
+                
+                return jsonify({
+                    'success': True,
+                    'explanation': explanation,
+                    'topic': topic,
+                    'subject': subject,
+                    'type': explanation_type,
+                    'academic_level': academic_level,
+                    'word_count': len(explanation.split()),
+                    'generated_at': datetime.now().isoformat(),
+                    'source': 'groq_ai'
+                })
+            else:
+                return jsonify({'error': 'No response from AI model'}), 500
+        else:
+            return jsonify({'error': f'AI API error: {response.status_code}'}), response.status_code
+            
+    except Exception as e:
+        print(f"Explanation generation error: {str(e)}")
+        return jsonify({'error': f'Failed to generate explanation: {str(e)}'}), 500
 
 @app.route('/api/assess-quiz', methods=['POST'])
 def assess_quiz():

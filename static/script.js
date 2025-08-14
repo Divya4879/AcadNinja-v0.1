@@ -1180,7 +1180,7 @@ function calculateTrend(scores) {
  */
 async function generateQuiz(subject, topic, academicLevel, quizType, numQuestions, context = '', difficulty = 'medium') {
     try {
-        console.log('Generating quiz with params:', { subject, topic, academicLevel, quizType, numQuestions, difficulty });
+        console.log('🎯 Generating quiz with params:', { subject, topic, academicLevel, quizType, numQuestions, difficulty });
         
         const response = await fetch('/api/generate-quiz', {
             method: 'POST',
@@ -1192,7 +1192,7 @@ async function generateQuiz(subject, topic, academicLevel, quizType, numQuestion
                 topic: topic,
                 academicLevel: academicLevel,
                 quizType: quizType,
-                numQuestions: numQuestions,
+                numQuestions: parseInt(numQuestions), // Ensure it's a number
                 context: context,
                 difficulty: difficulty
             })
@@ -1202,22 +1202,141 @@ async function generateQuiz(subject, topic, academicLevel, quizType, numQuestion
         try {
             data = await response.json();
         } catch (parseError) {
-            console.error('Failed to parse response as JSON:', parseError);
+            console.error('❌ Failed to parse response as JSON:', parseError);
             throw new Error('Server returned invalid response format');
         }
 
-        console.log('API Response:', data);
+        console.log('📥 API Response:', data);
 
-        if (response.ok && data.success) {
-            if (!data.quiz || !data.quiz.questions || data.quiz.questions.length === 0) {
-                throw new Error('No questions received from server');
+        if (response.ok && data.success && data.quiz && data.quiz.questions) {
+            const receivedQuestions = data.quiz.questions.length;
+            console.log(`✅ Received ${receivedQuestions} questions, requested ${numQuestions}`);
+            
+            // Validate we have the correct number of questions
+            if (receivedQuestions !== parseInt(numQuestions)) {
+                console.warn(`⚠️ Question count mismatch: got ${receivedQuestions}, expected ${numQuestions}`);
+                
+                // If we have fewer questions, supplement with additional ones
+                if (receivedQuestions < numQuestions) {
+                    const additionalNeeded = numQuestions - receivedQuestions;
+                    console.log(`🔄 Generating ${additionalNeeded} additional questions...`);
+                    
+                    const additionalQuestions = generateAdditionalQuestions(
+                        subject, topic, quizType, additionalNeeded, difficulty, receivedQuestions
+                    );
+                    
+                    data.quiz.questions = [...data.quiz.questions, ...additionalQuestions];
+                    console.log(`✅ Final quiz has ${data.quiz.questions.length} questions`);
+                }
+                
+                // If we have too many questions, trim to exact count
+                if (data.quiz.questions.length > numQuestions) {
+                    data.quiz.questions = data.quiz.questions.slice(0, numQuestions);
+                }
             }
+            
+            // Ensure all questions have proper structure
+            data.quiz.questions = data.quiz.questions.map((q, index) => ({
+                id: q.id || (index + 1),
+                question: q.question || `Question ${index + 1}`,
+                options: q.options || { A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D' },
+                correct_answer: q.correct_answer || q.correct || 'A',
+                explanation: q.explanation || 'Explanation not available',
+                difficulty: q.difficulty || difficulty
+            }));
+            
+            // Update quiz metadata
+            data.quiz.total_questions = data.quiz.questions.length;
+            data.quiz.source = data.source || 'api';
+            
+            console.log(`🎉 Successfully generated ${data.quiz.questions.length} questions from ${data.source}`);
             return data.quiz;
         } else {
-            // If API fails, generate fallback quiz
-            console.log('API failed, generating fallback quiz');
-            return generateFallbackQuiz(subject, topic, quizType, numQuestions, difficulty);
+            console.warn('⚠️ API response invalid, generating fallback quiz');
+            return generateComprehensiveFallbackQuiz(subject, topic, quizType, numQuestions, difficulty);
         }
+    } catch (error) {
+        console.error('❌ Quiz generation error:', error);
+        console.log('🔄 Generating emergency fallback quiz...');
+        return generateComprehensiveFallbackQuiz(subject, topic, quizType, numQuestions, difficulty);
+    }
+}
+
+/**
+ * Generate additional questions when API doesn't return enough
+ */
+function generateAdditionalQuestions(subject, topic, quizType, numNeeded, difficulty, startingId) {
+    console.log(`🔧 Generating ${numNeeded} additional questions starting from ID ${startingId + 1}`);
+    
+    const additionalQuestions = [];
+    const questionTemplates = getQuestionTemplates(subject, topic);
+    
+    for (let i = 0; i < numNeeded; i++) {
+        const questionId = startingId + i + 1;
+        const template = questionTemplates[i % questionTemplates.length];
+        
+        additionalQuestions.push({
+            id: questionId,
+            question: template.question.replace('{topic}', topic).replace('{subject}', subject),
+            options: template.options,
+            correct_answer: template.correct_answer,
+            explanation: template.explanation.replace('{topic}', topic),
+            difficulty: difficulty,
+            source: 'supplemental'
+        });
+    }
+    
+    return additionalQuestions;
+}
+
+/**
+ * Get question templates for different subjects and topics
+ */
+function getQuestionTemplates(subject, topic) {
+    const templates = {
+        'Blockchain': {
+            'Basics': [
+                {
+                    question: 'What is the primary purpose of blockchain technology?',
+                    options: { A: 'Data storage only', B: 'Decentralized and secure transactions', C: 'Gaming applications', D: 'Social media' },
+                    correct_answer: 'B',
+                    explanation: 'Blockchain technology is primarily designed for decentralized and secure transactions without intermediaries.'
+                },
+                {
+                    question: 'Which consensus mechanism does Bitcoin use?',
+                    options: { A: 'Proof of Stake', B: 'Proof of Work', C: 'Delegated Proof of Stake', D: 'Proof of Authority' },
+                    correct_answer: 'B',
+                    explanation: 'Bitcoin uses Proof of Work (PoW) consensus mechanism where miners compete to solve cryptographic puzzles.'
+                },
+                {
+                    question: 'What is a blockchain node?',
+                    options: { A: 'A cryptocurrency wallet', B: 'A computer that maintains the blockchain', C: 'A mining device', D: 'A trading platform' },
+                    correct_answer: 'B',
+                    explanation: 'A blockchain node is a computer that maintains a copy of the blockchain and participates in the network.'
+                }
+            ],
+            'Cryptocurrency': [
+                {
+                    question: 'What determines the value of a cryptocurrency?',
+                    options: { A: 'Government regulation only', B: 'Supply and demand in the market', C: 'Mining difficulty', D: 'Number of transactions' },
+                    correct_answer: 'B',
+                    explanation: 'Cryptocurrency value is primarily determined by supply and demand dynamics in the market.'
+                }
+            ]
+        }
+    };
+    
+    // Get templates for the specific subject and topic, or use defaults
+    if (templates[subject] && templates[subject][topic]) {
+        return templates[subject][topic];
+    } else if (templates[subject]) {
+        // Use any templates from the same subject
+        return Object.values(templates[subject]).flat();
+    } else {
+        // Use blockchain basics as default
+        return templates['Blockchain']['Basics'];
+    }
+}
     } catch (error) {
         console.error('Quiz generation error:', error);
         
@@ -1271,6 +1390,143 @@ async function assessQuiz(quiz, answers, quizType, subject, topic, academicLevel
         console.log('Generating fallback assessment...');
         return generateFallbackAssessment(quiz, answers, quizType, subject, topic);
     }
+}
+
+/**
+ * Generate comprehensive fallback quiz with real questions
+ */
+function generateComprehensiveFallbackQuiz(subject, topic, quizType, numQuestions, difficulty) {
+    console.log(`🔧 Generating comprehensive fallback quiz: ${numQuestions} questions for ${subject} - ${topic}`);
+    
+    // Comprehensive question database with real, educational content
+    const questionDatabase = {
+        'Blockchain': {
+            'Basics': [
+                {
+                    question: 'What is the first and most famous cryptocurrency?',
+                    options: { A: 'Ethereum', B: 'Bitcoin', C: 'Litecoin', D: 'Ripple' },
+                    correct_answer: 'B',
+                    explanation: 'Bitcoin was the first cryptocurrency, created by Satoshi Nakamoto in 2009. It introduced the concept of decentralized digital currency and remains the most valuable and widely recognized cryptocurrency.'
+                },
+                {
+                    question: 'What is a smart contract?',
+                    options: { A: 'A self-executing contract with terms written in code', B: 'A legal document', C: 'A cryptocurrency wallet', D: 'A mining algorithm' },
+                    correct_answer: 'A',
+                    explanation: 'Smart contracts are self-executing contracts with terms directly written into code. They automatically execute when predetermined conditions are met, without requiring intermediaries.'
+                },
+                {
+                    question: 'What is a \'block\' in blockchain?',
+                    options: { A: 'A cryptocurrency unit', B: 'A mining reward', C: 'A collection of transaction data', D: 'A digital wallet' },
+                    correct_answer: 'C',
+                    explanation: 'A block is a collection of transaction data that is cryptographically linked to previous blocks, forming a chain. Each block contains a hash of the previous block, transaction data, and a timestamp.'
+                },
+                {
+                    question: 'What makes blockchain secure?',
+                    options: { A: 'Cryptographic hashing and decentralization', B: 'Government regulation', C: 'Password protection', D: 'Bank verification' },
+                    correct_answer: 'A',
+                    explanation: 'Blockchain security comes from cryptographic hashing, decentralization, and consensus mechanisms. Each block is cryptographically linked to the previous one, making tampering extremely difficult.'
+                },
+                {
+                    question: 'What is a consensus mechanism?',
+                    options: { A: 'A mining process', B: 'A protocol for network agreement', C: 'A wallet feature', D: 'A trading mechanism' },
+                    correct_answer: 'B',
+                    explanation: 'A consensus mechanism is a protocol that ensures all nodes in a blockchain network agree on the validity of transactions and the current state of the ledger. Examples include Proof of Work and Proof of Stake.'
+                },
+                {
+                    question: 'What is decentralization in blockchain?',
+                    options: { A: 'Central authority control', B: 'Distributed network control', C: 'Government oversight', D: 'Bank management' },
+                    correct_answer: 'B',
+                    explanation: 'Decentralization means the network is controlled by distributed nodes rather than a central authority, eliminating single points of failure and reducing censorship risks.'
+                },
+                {
+                    question: 'What is a cryptocurrency wallet?',
+                    options: { A: 'A physical wallet', B: 'A bank account', C: 'A digital tool to store crypto keys', D: 'A mining device' },
+                    correct_answer: 'C',
+                    explanation: 'A cryptocurrency wallet is a digital tool that stores private and public keys for cryptocurrency transactions. It doesn\'t actually store the cryptocurrency itself, but the keys needed to access it.'
+                },
+                {
+                    question: 'What is mining in blockchain?',
+                    options: { A: 'Digging for gold', B: 'Validating transactions and creating blocks', C: 'Buying cryptocurrency', D: 'Trading tokens' },
+                    correct_answer: 'B',
+                    explanation: 'Mining is the process of validating transactions and creating new blocks in the blockchain. Miners use computational power to solve cryptographic puzzles and are rewarded with cryptocurrency.'
+                },
+                {
+                    question: 'What is a hash function in blockchain?',
+                    options: { A: 'A trading algorithm', B: 'A mathematical function that converts input to fixed output', C: 'A wallet address', D: 'A consensus method' },
+                    correct_answer: 'B',
+                    explanation: 'A hash function is a mathematical function that converts input data of any size into a fixed-size string of characters. In blockchain, it ensures data integrity and creates unique identifiers for blocks.'
+                },
+                {
+                    question: 'What is immutability in blockchain?',
+                    options: { A: 'Ability to change data easily', B: 'Data cannot be altered once recorded', C: 'Fast transaction processing', D: 'Low transaction fees' },
+                    correct_answer: 'B',
+                    explanation: 'Immutability means that once data is recorded in the blockchain, it cannot be altered or deleted. This is achieved through cryptographic hashing and the distributed nature of the network.'
+                }
+            ]
+        }
+    };
+    
+    // Get questions for the specific subject and topic
+    let availableQuestions = [];
+    
+    if (questionDatabase[subject] && questionDatabase[subject][topic]) {
+        availableQuestions = [...questionDatabase[subject][topic]];
+    } else if (questionDatabase[subject]) {
+        // Use questions from the same subject but different topics
+        Object.values(questionDatabase[subject]).forEach(topicQuestions => {
+            availableQuestions.push(...topicQuestions);
+        });
+    } else {
+        // Default to blockchain basics questions
+        availableQuestions = [...questionDatabase['Blockchain']['Basics']];
+    }
+    
+    // If we still don't have enough questions, generate additional ones
+    while (availableQuestions.length < numQuestions) {
+        const questionNum = availableQuestions.length + 1;
+        availableQuestions.push({
+            question: `What is a fundamental concept in ${topic}? (Question ${questionNum})`,
+            options: {
+                A: `Basic principle of ${topic}`,
+                B: `Core concept of ${topic}`,
+                C: `Advanced feature of ${topic}`,
+                D: `Related technology to ${topic}`
+            },
+            correct_answer: 'B',
+            explanation: `This question tests understanding of core ${topic} concepts in ${subject}. The correct answer represents the fundamental principles that students should master.`
+        });
+    }
+    
+    // Shuffle and select the required number of questions
+    const shuffled = availableQuestions.sort(() => 0.5 - Math.random());
+    const selectedQuestions = shuffled.slice(0, numQuestions);
+    
+    // Format questions with proper IDs and validation
+    const formattedQuestions = selectedQuestions.map((q, index) => ({
+        id: index + 1,
+        question: q.question,
+        options: q.options,
+        correct_answer: q.correct_answer,
+        explanation: q.explanation,
+        difficulty: difficulty,
+        source: 'comprehensive_fallback'
+    }));
+    
+    console.log(`✅ Generated ${formattedQuestions.length} comprehensive fallback questions`);
+    
+    return {
+        questions: formattedQuestions,
+        title: `${subject} - ${topic} Quiz`,
+        subject: subject,
+        topic: topic,
+        difficulty: difficulty,
+        quiz_type: quizType,
+        total_questions: formattedQuestions.length,
+        time_limit: 30,
+        instructions: `This quiz covers ${topic} concepts in ${subject} at ${difficulty} difficulty level. Read each question carefully and select the best answer.`,
+        created_at: new Date().toISOString(),
+        source: 'comprehensive_fallback'
+    };
 }
 
 /**
@@ -2472,35 +2728,79 @@ async function finishQuiz() {
 /**
  * Show quiz results
  */
+/**
+ * Calculate grade from percentage
+ */
+function calculateGradeFromPercentage(percentage) {
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 85) return 'A';
+    if (percentage >= 80) return 'A-';
+    if (percentage >= 75) return 'B+';
+    if (percentage >= 70) return 'B';
+    if (percentage >= 65) return 'B-';
+    if (percentage >= 60) return 'C+';
+    if (percentage >= 55) return 'C';
+    if (percentage >= 50) return 'C-';
+    return 'F';
+}
+
 function showQuizResults(assessment) {
     const container = document.getElementById('quiz-results');
     
-    // Store quiz results for progress tracking
-    const quizResult = {
-        timestamp: new Date().toISOString(),
-        subject: currentSubject.name,
-        topic: currentTopic.name,
-        difficulty: quizDifficulty,
-        score: assessment.percentage || 0,
-        grade: assessment.grade || 'N/A',
-        totalQuestions: currentQuiz.questions.length,
-        correctAnswers: assessment.correct_answers || 0
+    // Ensure assessment has all required fields with proper defaults
+    const validatedAssessment = {
+        score: assessment.score || 0,
+        total_questions: assessment.total_questions || currentQuiz.questions.length,
+        correct_answers: assessment.correct_answers || 0,
+        percentage: assessment.percentage || 0,
+        grade: assessment.grade || calculateGradeFromPercentage(assessment.percentage || 0),
+        assessment: assessment.assessment || {
+            strengths: ['Quiz completed'],
+            areas_for_improvement: ['Continue practicing'],
+            overall_feedback: 'Keep up the good work!'
+        },
+        question_feedback: assessment.question_feedback || [],
+        study_recommendations: assessment.study_recommendations || [],
+        resources: assessment.resources || []
     };
     
+    // Store quiz results for progress tracking with validated data
+    const quizResult = {
+        timestamp: new Date().toISOString(),
+        subject: currentSubject?.name || 'Unknown Subject',
+        topic: currentTopic?.name || 'Unknown Topic',
+        difficulty: quizDifficulty || 'medium',
+        score: validatedAssessment.percentage,
+        grade: validatedAssessment.grade,
+        totalQuestions: validatedAssessment.total_questions,
+        correctAnswers: validatedAssessment.correct_answers,
+        rawScore: validatedAssessment.score
+    };
+    
+    console.log('📊 Storing quiz result:', quizResult);
+    
     // Update quiz history
+    if (!quizHistory) quizHistory = [];
     quizHistory.unshift(quizResult);
-    if (quizHistory.length > 50) quizHistory = quizHistory.slice(0, 50); // Keep last 50 quizzes
+    if (quizHistory.length > 50) quizHistory = quizHistory.slice(0, 50);
     localStorage.setItem('quizHistory', JSON.stringify(quizHistory));
     
-    // Update topic performance
-    const topicKey = `${currentSubject.name}-${currentTopic.name}`;
+    // Update topic performance with proper validation
+    const topicKey = `${quizResult.subject}-${quizResult.topic}`;
+    if (!topicPerformance) topicPerformance = {};
     if (!topicPerformance[topicKey]) {
         topicPerformance[topicKey] = { scores: [], averageScore: 0, totalQuizzes: 0 };
     }
-    topicPerformance[topicKey].scores.push(assessment.percentage || 0);
+    
+    topicPerformance[topicKey].scores.push(validatedAssessment.percentage);
     topicPerformance[topicKey].totalQuizzes++;
-    topicPerformance[topicKey].averageScore = topicPerformance[topicKey].scores.reduce((a, b) => a + b, 0) / topicPerformance[topicKey].scores.length;
+    topicPerformance[topicKey].averageScore = Math.round(
+        topicPerformance[topicKey].scores.reduce((a, b) => a + b, 0) / topicPerformance[topicKey].scores.length
+    );
+    
     localStorage.setItem('topicPerformance', JSON.stringify(topicPerformance));
+    
+    console.log('📈 Updated topic performance:', topicPerformance[topicKey]);
     
     // Create comprehensive results HTML
     let resultsHTML = `
