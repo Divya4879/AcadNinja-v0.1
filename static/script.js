@@ -2568,8 +2568,8 @@ function showQuizResults(assessment) {
                                 <p class="text-high-contrast font-medium mb-2">${sanitizeHtml(feedback.question_text)}</p>
                             </div>
                             
-                            ${feedback.options ? `
-                                <!-- MCQ Options -->
+                            ${feedback.options ? 
+                                `<!-- MCQ Options -->
                                 <div class="space-y-2 mb-3">
                                     ${Object.entries(feedback.options).map(([optionLetter, optionText]) => {
                                         const isUserAnswer = userAnswer === optionLetter;
@@ -2586,22 +2586,20 @@ function showQuizResults(assessment) {
                                             statusIcon = ' <span class="text-red-200 font-bold">✗ Your Answer</span>';
                                         }
                                         
-                                        return `
-                                            <div class="p-3 rounded border-2 ${optionClass}">
-                                                <span class="font-bold">${optionLetter}.</span> ${sanitizeHtml(optionText)}${statusIcon}
-                                            </div>
-                                        `;
+                                        return '<div class="p-3 rounded border-2 ' + optionClass + '">' +
+                                               '<span class="font-bold">' + optionLetter + '.</span> ' + sanitizeHtml(optionText) + statusIcon +
+                                               '</div>';
                                     }).join('')}
-                                </div>
-                            ` : `
-                                <!-- Subjective Answer -->
+                                </div>` 
+                                : 
+                                `<!-- Subjective Answer -->
                                 <div class="mb-3">
                                     <p class="text-gray-300 mb-2"><strong>Your Answer:</strong></p>
                                     <div class="bg-gray-700 p-3 rounded border">
                                         ${userAnswer !== 'No answer provided' ? sanitizeHtml(userAnswer) : '<em class="text-gray-400">No answer provided</em>'}
                                     </div>
-                                </div>
-                            `}
+                                </div>`
+                            }
                             
                             <!-- Answer Summary -->
                             <div class="mb-4 p-3 rounded ${isCorrect ? 'bg-green-900 bg-opacity-30' : 'bg-red-900 bg-opacity-30'}">
@@ -2630,37 +2628,6 @@ function showQuizResults(assessment) {
                                 <div class="mb-3">
                                     <h5 class="text-sm font-semibold text-red-300 mb-2">❌ Why This Answer is Wrong:</h5>
                                     <p class="text-gray-300 text-sm leading-relaxed">${sanitizeHtml(feedback.why_wrong)}</p>
-                                </div>
-                            ` : ''}
-                        </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-        ` : ''}
-                                    }).join('')}
-                                </div>
-                            ` : `
-                                <!-- Subjective Answer -->
-                                <div class="space-y-3 mb-3">
-                                    <div class="bg-gray-700 p-3 rounded">
-                                        <p class="text-sm text-gray-300 mb-1">Your Answer:</p>
-                                        <p class="text-white">${sanitizeHtml(userAnswer || 'No answer provided')}</p>
-                                    </div>
-                                    ${question.sample_answer ? `
-                                        <div class="bg-green-800 bg-opacity-30 p-3 rounded border border-green-600 border-opacity-30">
-                                            <p class="text-sm text-green-300 mb-1">Sample Answer:</p>
-                                            <p class="text-green-100">${sanitizeHtml(question.sample_answer)}</p>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            `}
-                            
-                            <!-- Explanation -->
-                            ${feedback.feedback ? `
-                                <div class="bg-blue-800 bg-opacity-30 p-3 rounded border border-blue-600 border-opacity-30">
-                                    <p class="text-sm text-blue-300 mb-1">💡 Explanation:</p>
-                                    <p class="text-blue-100">${sanitizeHtml(feedback.feedback)}</p>
                                 </div>
                             ` : ''}
                         </div>
