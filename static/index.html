@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AcadTutor</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #0f766e 50%, #134e4a 75%, #0f172a 100%);
+            min-height: 100vh;
+        }
+        .glass-effect {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .card-dark {
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* High contrast text for accessibility */
+        .text-high-contrast {
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+        }
+        .text-medium-contrast {
+            color: #e2e8f0;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+        }
+        /* Quiz specific styles */
+        .quiz-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .question-card {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(15px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .option-button {
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            padding: 1rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            text-align: left;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+        .option-button:hover {
+            background: rgba(15, 118, 110, 0.3);
+            border-color: #0f766e;
+            transform: translateY(-1px);
+        }
+        .option-button.selected {
+            background: rgba(15, 118, 110, 0.6);
+            border-color: #0f766e;
+            box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.3);
+        }
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.2);
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, #0f766e, #14b8a6);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        
+        /* Academic content styling for rich explanations */
+        .academic-content {
+            line-height: 1.7;
+            font-size: 16px;
+        }
+        
+        .academic-content h1 {
+            scroll-margin-top: 2rem;
+        }
+        
+        .academic-content h2 {
+            scroll-margin-top: 2rem;
+        }
+        
+        .academic-content h3 {
+            scroll-margin-top: 2rem;
+        }
+        
+        .academic-content p {
+            text-align: justify;
+            hyphens: auto;
+        }
+        
+        .academic-content ul {
+            position: relative;
+        }
+        
+        .academic-content ul::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #3b82f6, transparent);
+        }
+        
+        .academic-content blockquote {
+            position: relative;
+            font-style: italic;
+        }
+        
+        .academic-content blockquote::before {
+            content: '"';
+            font-size: 3rem;
+            color: #fbbf24;
+            position: absolute;
+            left: -1rem;
+            top: -0.5rem;
+            opacity: 0.3;
+        }
+        
+        /* Smooth scrolling for table of contents */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Print styles for academic content */
+        @media print {
+            .academic-content {
+                color: black !important;
+                background: white !important;
+            }
+            
+            .academic-content h1,
+            .academic-content h2,
+            .academic-content h3 {
+                color: black !important;
+                break-after: avoid;
+            }
+            
+            .academic-content p {
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen">
+    <!-- Mobile menu overlay -->
+    <div id="mobile-menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden md:hidden"></div>
+    
+    <div class="flex min-h-screen">
+        <!-- Sidebar Navigation -->
+        <nav id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 glass-effect shadow-lg transform -translate-x-full transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:w-64 md:flex-shrink-0">
+            <div class="flex flex-col h-full">
+                <!-- Header -->
+                <div class="flex items-center justify-between p-4 border-b">
+                    <div>
+                        <h1 class="text-xl font-bold text-high-contrast">AcadTutor</h1>
+                        <p class="text-xs text-medium-contrast">Study Organizer</p>
+                    </div>
+                    <button id="close-sidebar" class="md:hidden p-2 rounded-lg hover:bg-white hover:bg-opacity-10">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Navigation Links -->
+                <div class="flex-1 px-4 py-6 space-y-2">
+                    <button id="dashboard-tab" class="tab-btn active w-full flex items-center px-4 py-3 text-left rounded-lg bg-teal-600 text-high-contrast font-medium transition-colors">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z"></path>
+                        </svg>
+                        Dashboard
+                    </button>
+                    <button id="subjects-tab" class="tab-btn w-full flex items-center px-4 py-3 text-left rounded-lg bg-white bg-opacity-10 text-medium-contrast font-medium hover:bg-white hover:bg-opacity-20 transition-colors">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                        </svg>
+                        Subjects
+                    </button>
+                    <button id="topics-tab" class="tab-btn w-full flex items-center px-4 py-3 text-left rounded-lg bg-white bg-opacity-10 text-medium-contrast font-medium hover:bg-white hover:bg-opacity-20 transition-colors hidden">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                        Topics
+                    </button>
+                    <button id="quiz-tab" class="tab-btn w-full flex items-center px-4 py-3 text-left rounded-lg bg-white bg-opacity-10 text-medium-contrast font-medium hover:bg-white hover:bg-opacity-20 transition-colors hidden">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Quiz
+                    </button>
+                    <button id="detail-tab" class="tab-btn w-full flex items-center px-4 py-3 text-left rounded-lg bg-white bg-opacity-10 text-medium-contrast font-medium hover:bg-white hover:bg-opacity-20 transition-colors hidden">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                        </svg>
+                        Topic Detail
+                    </button>
+                </div>
+                
+                <!-- Footer -->
+                <div class="p-4 border-t border-white border-opacity-20">
+                    <div class="text-xs text-medium-contrast text-center">
+                        <p>Academic Level:</p>
+                        <p id="sidebar-academic-level" class="font-medium text-high-contrast">Not set</p>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <!-- Mobile Header -->
+            <header class="md:hidden glass-effect shadow-sm border-b border-white border-opacity-20 px-4 py-3 flex items-center justify-between">
+                <button id="open-sidebar" class="p-2 rounded-lg hover:bg-white hover:bg-opacity-10">
+                    <svg class="w-6 h-6 text-high-contrast" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+                <h1 class="text-lg font-semibold text-high-contrast">AcadTutor</h1>
+                <div class="w-10"></div> <!-- Spacer for centering -->
+            </header>
+
+            <!-- Content Area -->
+            <main class="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+
+                <!-- Dashboard View -->
+                <div id="dashboard-view" class="view">
+                    <!-- Welcome Header -->
+                    <div class="mb-6 md:mb-8">
+                        <h2 class="text-2xl md:text-3xl font-bold text-high-contrast mb-2">Welcome to AcadTutor</h2>
+                        <p class="text-medium-contrast text-sm md:text-base">Organize your learning materials and track progress</p>
+                    </div>
+
+                    <!-- Overview Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+                        <div class="card-dark rounded-lg shadow-sm p-4 md:p-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-base md:text-lg font-semibold text-teal-400">📚 Subjects</h3>
+                                <div class="text-xs text-medium-contrast bg-white bg-opacity-10 px-2 py-1 rounded">Max 5</div>
+                            </div>
+                            <p id="dashboard-subjects-count" class="text-2xl md:text-3xl font-bold text-high-contrast mb-1">0</p>
+                            <p class="text-xs md:text-sm text-medium-contrast">subjects created</p>
+                        </div>
+                        
+                        <div class="card-dark rounded-lg shadow-sm p-4 md:p-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-base md:text-lg font-semibold text-emerald-400">📝 Topics</h3>
+                                <div class="text-xs text-medium-contrast bg-white bg-opacity-10 px-2 py-1 rounded">Max 30/subject</div>
+                            </div>
+                            <p id="dashboard-topics-count" class="text-2xl md:text-3xl font-bold text-high-contrast mb-1">0</p>
+                            <p class="text-xs md:text-sm text-medium-contrast">across all subjects</p>
+                        </div>
+                        
+                        <div class="card-dark rounded-lg shadow-sm p-4 md:p-6 sm:col-span-2 lg:col-span-1">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-base md:text-lg font-semibold text-purple-400">🎯 Average Score</h3>
+                                <div class="text-xs text-medium-contrast bg-white bg-opacity-10 px-2 py-1 rounded">Quizzes</div>
+                            </div>
+                            <p id="dashboard-avg-score" class="text-2xl md:text-3xl font-bold text-high-contrast mb-1">0%</p>
+                            <p class="text-xs md:text-sm text-medium-contrast">from completed quizzes</p>
+                        </div>
+                    </div>
+
+                    <!-- Academic Level Section -->
+                    <div class="card-dark rounded-lg shadow-sm p-4 md:p-6 mb-4 md:mb-6">
+                        <h3 class="text-base md:text-lg font-semibold mb-3 md:mb-4 text-high-contrast">🎓 Academic Level</h3>
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                                <p id="current-academic-level" class="text-high-contrast font-medium">Not set</p>
+                                <p class="text-xs text-medium-contrast mt-1">Set your level for personalized content</p>
+                            </div>
+                            <button id="change-level-btn" class="bg-teal-600 hover:bg-teal-700 text-high-contrast px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                Change Level
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Progress Overview -->
+                    <div class="card-dark rounded-lg shadow-sm p-4 md:p-6 mb-4 md:mb-6">
+                        <h3 class="text-base md:text-lg font-semibold mb-3 md:mb-4 text-high-contrast">📊 Learning Analytics</h3>
+                        <div id="progress-overview" class="space-y-3 md:space-y-4">
+                            <!-- Dynamic progress will be rendered here -->
+                            <div class="text-center text-gray-400 py-8">
+                                <div class="text-4xl mb-2">📈</div>
+                                <p>Take quizzes to see your progress analytics</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="card-dark rounded-lg shadow-sm p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold mb-3 md:mb-4 text-high-contrast">⚡ Quick Actions</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <button id="quick-add-subject" class="bg-emerald-600 hover:bg-emerald-700 text-high-contrast px-4 py-3 rounded-lg font-medium transition-colors text-sm">
+                                <span class="block">Add Subject</span>
+                                <span class="text-xs opacity-90">Create new subject</span>
+                            </button>
+                            <button id="quick-add-topic" class="bg-teal-600 hover:bg-teal-700 text-high-contrast px-4 py-3 rounded-lg font-medium transition-colors text-sm" disabled>
+                                <span class="block">Add Topic</span>
+                                <span class="text-xs opacity-90">Add to subject</span>
+                            </button>
+                            <button id="quick-take-quiz" class="bg-purple-600 hover:bg-purple-700 text-high-contrast px-4 py-3 rounded-lg font-medium transition-colors text-sm" disabled>
+                                <span class="block">Take Quiz</span>
+                                <span class="text-xs opacity-90">AI-powered</span>
+                            </button>
+                            <button id="quick-study-session" class="bg-orange-600 hover:bg-orange-700 text-high-contrast px-4 py-3 rounded-lg font-medium transition-colors text-sm" disabled>
+                                <span class="block">Study Session</span>
+                                <span class="text-xs opacity-90">Start learning</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subjects View -->
+                <div id="subjects-view" class="view hidden">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="text-xl md:text-2xl font-semibold text-high-contrast">Subjects</h2>
+                            <p id="subjects-count" class="text-medium-contrast text-sm mt-1"></p>
+                        </div>
+                        <button id="add-subject-btn" class="bg-emerald-600 hover:bg-emerald-700 text-high-contrast px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
+                            Add Subject
+                        </button>
+                    </div>
+                    <div id="subjects-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                        <!-- Subjects will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Topics View -->
+                <div id="topics-view" class="view hidden">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="text-xl md:text-2xl font-semibold text-high-contrast">All Topics</h2>
+                            <p class="text-medium-contrast text-sm mt-1">Browse topics across all subjects</p>
+                        </div>
+                        <button id="add-topic-btn" class="bg-emerald-600 hover:bg-emerald-700 text-high-contrast px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
+                            Add Topic
+                        </button>
+                    </div>
+                    <div id="topics-list" class="space-y-6">
+                        <!-- Topics will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Topic Detail View -->
+                <div id="detail-view" class="view hidden">
+                    <div class="mb-4 md:mb-6">
+                        <button id="back-to-subjects" class="text-teal-400 hover:text-teal-300 mb-3 text-sm font-medium flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                            </svg>
+                            Back to Subjects
+                        </button>
+                        <h2 id="topic-title" class="text-xl md:text-2xl font-semibold text-high-contrast"></h2>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <!-- Expert Topic Explanation -->
+                        <div class="card-dark rounded-lg shadow-sm p-4 md:p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-base md:text-lg font-semibold text-high-contrast">🎓 Expert Topic Explanation</h3>
+                                <button id="generate-explanation-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                    Generate Explanation
+                                </button>
+                            </div>
+                            <div id="topic-explanation" class="prose prose-invert max-w-none">
+                                <div class="text-center text-gray-400 py-8">
+                                    <div class="text-4xl mb-3">🧠</div>
+                                    <p class="text-sm">Click "Generate Explanation" to get an in-depth, expert-level explanation of this topic</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes and Links Section -->
+                        <div class="card-dark rounded-lg shadow-sm p-4 md:p-6">
+                            <h3 class="text-base md:text-lg font-semibold mb-4 text-high-contrast">📝 Notes & Resources</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-medium-contrast mb-2">Notes</label>
+                                    <textarea id="topic-notes" class="w-full h-32 md:h-40 p-3 border border-white border-opacity-20 rounded-lg resize-none text-sm bg-white bg-opacity-10 text-high-contrast placeholder-gray-400" placeholder="Add your notes here..."></textarea>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-medium text-medium-contrast mb-2">Resource Links</h4>
+                                    <div id="links-list" class="space-y-2 mb-3"></div>
+                                    <div class="flex flex-col sm:flex-row gap-2">
+                                        <input id="new-link" type="url" class="flex-1 p-2 border border-white border-opacity-20 rounded-lg text-sm bg-white bg-opacity-10 text-high-contrast placeholder-gray-400" placeholder="https://example.com">
+                                        <button id="add-link-btn" class="bg-teal-600 hover:bg-teal-700 text-high-contrast px-4 py-2 rounded-lg text-sm font-medium transition-colors">Add Link</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quiz Section -->
+                        <div class="card-dark rounded-lg shadow-sm p-4 md:p-6">
+                            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+                                <h3 class="text-base md:text-lg font-semibold text-high-contrast">🧠 AI-Powered Quiz</h3>
+                                <button id="take-quiz-btn" class="bg-purple-600 hover:bg-purple-700 text-high-contrast px-6 py-2 rounded-lg text-sm font-medium transition-colors">
+                                    Take Quiz
+                                </button>
+                            </div>
+                            <p class="text-medium-contrast text-sm mb-4">Test your knowledge with AI-generated questions tailored to your academic level.</p>
+                            <div id="quiz-history" class="space-y-2">
+                                <!-- Quiz history will be shown here -->
+                            </div>
+                        </div>
+
+                        <!-- Performance Analytics -->
+                        <div class="card-dark rounded-lg shadow-sm p-4 md:p-6">
+                            <h3 class="text-base md:text-lg font-semibold mb-4 text-high-contrast">📊 Topic Performance</h3>
+                            <div id="topic-performance" class="space-y-3">
+                                <div class="text-center text-gray-400 py-4">
+                                    <div class="text-2xl mb-2">🎯</div>
+                                    <p class="text-sm">Complete quizzes to track your performance</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quiz View -->
+                <div id="quiz-view" class="view hidden">
+                    <div class="quiz-container">
+                        <!-- Quiz Header -->
+                        <div class="mb-6">
+                            <button id="back-to-topic" class="text-teal-400 hover:text-teal-300 mb-3 text-sm font-medium flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                </svg>
+                                Back to Topic
+                            </button>
+                            <h2 id="quiz-title" class="text-xl md:text-2xl font-semibold text-high-contrast mb-2">Quiz</h2>
+                            <div class="flex items-center justify-between">
+                                <p id="quiz-info" class="text-medium-contrast text-sm"></p>
+                                <div id="quiz-progress" class="text-sm text-medium-contrast"></div>
+                            </div>
+                            <div class="progress-bar mt-3">
+                                <div id="quiz-progress-bar" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Quiz Setup -->
+                        <div id="quiz-setup" class="question-card">
+                            <h3 class="text-lg font-semibold text-high-contrast mb-4">Quiz Setup</h3>
+                            
+                            <!-- Quiz Info Display -->
+                            <div id="quiz-info-display" class="bg-gray-700 rounded-lg p-4 mb-4 hidden">
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span class="text-gray-400">Subject:</span>
+                                        <span id="quiz-subject-display" class="text-white ml-2"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Topic:</span>
+                                        <span id="quiz-topic-display" class="text-white ml-2"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Type:</span>
+                                        <span id="quiz-type-display" class="text-white ml-2"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Questions:</span>
+                                        <span id="quiz-questions-display" class="text-white ml-2"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Difficulty:</span>
+                                        <span id="quiz-difficulty-display" class="text-white ml-2"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Level:</span>
+                                        <span id="quiz-level-display" class="text-white ml-2"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-medium-contrast mb-2">Quiz Type</label>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <button id="mcq-type" class="option-button selected">
+                                            <div class="font-medium">Multiple Choice</div>
+                                            <div class="text-sm opacity-80">Quick assessment with options</div>
+                                        </button>
+                                        <button id="subjective-type" class="option-button">
+                                            <div class="font-medium">Subjective</div>
+                                            <div class="text-sm opacity-80">Detailed written answers</div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-medium-contrast mb-2">Difficulty Level</label>
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <button id="easy-difficulty" class="option-button">
+                                            <div class="font-medium">Easy</div>
+                                            <div class="text-sm opacity-80">Basic concepts</div>
+                                        </button>
+                                        <button id="medium-difficulty" class="option-button selected">
+                                            <div class="font-medium">Medium</div>
+                                            <div class="text-sm opacity-80">Standard level</div>
+                                        </button>
+                                        <button id="hard-difficulty" class="option-button">
+                                            <div class="font-medium">Hard</div>
+                                            <div class="text-sm opacity-80">Advanced concepts</div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-medium-contrast mb-2">Number of Questions</label>
+                                    <div id="question-count-options" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        <!-- Options will be populated by JavaScript -->
+                                    </div>
+                                </div>
+
+                                <div class="flex justify-center pt-4">
+                                    <button id="start-quiz-btn" class="bg-purple-600 hover:bg-purple-700 text-high-contrast px-8 py-3 rounded-lg font-medium transition-colors">
+                                        Generate Quiz
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quiz Questions -->
+                        <div id="quiz-questions" class="hidden">
+                            <!-- Questions will be populated here -->
+                        </div>
+
+                        <!-- Quiz Results -->
+                        <div id="quiz-results" class="hidden space-y-6">
+                            <!-- Results will be dynamically populated here -->
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-70 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div id="modal-content" class="card-dark rounded-lg p-4 md:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+                <!-- Modal content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+# Environment variables (keep .env template, ignore actual keys)
+.env.local
+.env.production
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+server.log
+
+# Local development
+node_modules/
+.npm
+.cache/
+
+# Development files (not needed in production)
+test_*.html
+test_*.py
+*_broken.py
+*.service
+run_background.sh
+start_*.py
+setup_and_run.*
