@@ -1212,53 +1212,72 @@ async function generateQuiz(subject, topic, academicLevel, quizType, numQuestion
             const receivedQuestions = data.quiz.questions.length;
             console.log(`✅ Received ${receivedQuestions} questions, requested ${numQuestions}`);
             
-            // Validate we have the correct number of questions
-            if (receivedQuestions !== parseInt(numQuestions)) {
-                console.warn(`⚠️ Question count mismatch: got ${receivedQuestions}, expected ${numQuestions}`);
+            // CRITICAL FIX: Ensure we have EXACTLY the requested number of questions
+            if (receivedQuestions < numQuestions) {
+                console.log(`🔄 Need ${numQuestions - receivedQuestions} more questions. Generating additional...`);
                 
-                // If we have fewer questions, supplement with additional ones
-                if (receivedQuestions < numQuestions) {
-                    const additionalNeeded = numQuestions - receivedQuestions;
-                    console.log(`🔄 Generating ${additionalNeeded} additional questions...`);
-                    
-                    const additionalQuestions = generateAdditionalQuestions(
-                        subject, topic, quizType, additionalNeeded, difficulty, receivedQuestions
-                    );
-                    
-                    data.quiz.questions = [...data.quiz.questions, ...additionalQuestions];
-                    console.log(`✅ Final quiz has ${data.quiz.questions.length} questions`);
+                // Generate additional questions using the same API call
+                const additionalResponse = await fetch('/api/generate-quiz', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        subject: subject,
+                        topic: topic,
+                        academicLevel: academicLevel,
+                        quizType: quizType,
+                        numQuestions: numQuestions - receivedQuestions,
+                        context: `Additional questions for ${topic}. Make them different from previous questions.`,
+                        difficulty: difficulty
+                    })
+                });
+                
+                if (additionalResponse.ok) {
+                    const additionalData = await additionalResponse.json();
+                    if (additionalData.success && additionalData.quiz && additionalData.quiz.questions) {
+                        // Combine questions with proper IDs
+                        const additionalQuestions = additionalData.quiz.questions.map((q, index) => ({
+                            ...q,
+                            id: receivedQuestions + index + 1
+                        }));
+                        data.quiz.questions = [...data.quiz.questions, ...additionalQuestions];
+                        console.log(`✅ Added ${additionalQuestions.length} additional questions`);
+                    }
                 }
                 
-                // If we have too many questions, trim to exact count
-                if (data.quiz.questions.length > numQuestions) {
-                    data.quiz.questions = data.quiz.questions.slice(0, numQuestions);
+                // If still not enough, use enhanced fallback
+                if (data.quiz.questions.length < numQuestions) {
+                    const stillNeeded = numQuestions - data.quiz.questions.length;
+                    const fallbackQuestions = generateEnhancedFallbackQuestions(subject, topic, stillNeeded, difficulty, academicLevel);
+                    data.quiz.questions = [...data.quiz.questions, ...fallbackQuestions];
                 }
             }
             
-            // Ensure all questions have proper structure
+            // Ensure we have exactly the requested number
+            data.quiz.questions = data.quiz.questions.slice(0, numQuestions);
+            
+            // Validate and enhance each question
             data.quiz.questions = data.quiz.questions.map((q, index) => ({
-                id: q.id || (index + 1),
-                question: q.question || `Question ${index + 1}`,
-                options: q.options || { A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D' },
+                id: index + 1,
+                question: q.question || `Question ${index + 1} about ${topic}`,
+                options: q.options || generateOptionsForTopic(topic, subject),
                 correct_answer: q.correct_answer || q.correct || 'A',
-                explanation: q.explanation || 'Explanation not available',
-                difficulty: q.difficulty || difficulty
+                explanation: q.explanation || `This question tests understanding of ${topic} concepts.`,
+                difficulty: difficulty,
+                source: q.source || 'groq_ai'
             }));
             
-            // Update quiz metadata
-            data.quiz.total_questions = data.quiz.questions.length;
-            data.quiz.source = data.source || 'api';
-            
-            console.log(`🎉 Successfully generated ${data.quiz.questions.length} questions from ${data.source}`);
+            console.log(`🎉 Successfully generated ${data.quiz.questions.length} questions from ${data.source || 'groq_ai'}`);
             return data.quiz;
         } else {
-            console.warn('⚠️ API response invalid, generating fallback quiz');
-            return generateComprehensiveFallbackQuiz(subject, topic, quizType, numQuestions, difficulty);
+            console.warn('⚠️ API response invalid, using enhanced fallback');
+            return generateEnhancedFallbackQuiz(subject, topic, quizType, numQuestions, difficulty, academicLevel);
         }
     } catch (error) {
         console.error('❌ Quiz generation error:', error);
-        console.log('🔄 Generating emergency fallback quiz...');
-        return generateComprehensiveFallbackQuiz(subject, topic, quizType, numQuestions, difficulty);
+        console.log('🔄 Using enhanced fallback quiz generation');
+        return generateEnhancedFallbackQuiz(subject, topic, quizType, numQuestions, difficulty, academicLevel);
     }
 }
 
@@ -1385,9 +1404,283 @@ async function assessQuiz(quiz, answers, quizType, subject, topic, academicLevel
 }
 
 /**
- * Generate comprehensive fallback quiz with real questions
+ * Generate enhanced fallback quiz with academic-level questions
  */
-function generateComprehensiveFallbackQuiz(subject, topic, quizType, numQuestions, difficulty) {
+function generateEnhancedFallbackQuiz(subject, topic, quizType, numQuestions, difficulty, academicLevel) {
+    console.log(`🔧 Generating enhanced fallback quiz: ${numQuestions} questions for ${subject} - ${topic} (${academicLevel} level)`);
+    
+    // Academic-level question database
+    const academicQuestionDatabase = {
+        'Blockchain': {
+            'Basics': {
+                'Primary': [
+                    {
+                        question: 'What is blockchain in simple terms?',
+                        options: { A: 'A type of computer game', B: 'A digital chain of information blocks', C: 'A physical chain', D: 'A type of currency' },
+                        correct_answer: 'B',
+                        explanation: 'Blockchain is like a digital notebook where information is stored in connected blocks, making it very secure.'
+                    }
+                ],
+                'Secondary': [
+                    {
+                        question: 'What is the primary purpose of blockchain technology?',
+                        options: { A: 'Entertainment', B: 'Secure, decentralized record-keeping', C: 'Social media', D: 'Gaming' },
+                        correct_answer: 'B',
+                        explanation: 'Blockchain technology is designed to create secure, transparent, and decentralized systems for recording transactions and data.'
+                    },
+                    {
+                        question: 'Which of the following is a key characteristic of blockchain?',
+                        options: { A: 'Centralized control', B: 'Immutability', C: 'Easy to hack', D: 'Requires no verification' },
+                        correct_answer: 'B',
+                        explanation: 'Immutability means that once data is recorded in a blockchain, it cannot be easily changed or deleted, ensuring data integrity.'
+                    }
+                ],
+                'College': [
+                    {
+                        question: 'What is the role of cryptographic hash functions in blockchain?',
+                        options: { 
+                            A: 'To encrypt user passwords', 
+                            B: 'To create unique digital fingerprints for blocks and ensure data integrity', 
+                            C: 'To compress data', 
+                            D: 'To speed up transactions' 
+                        },
+                        correct_answer: 'B',
+                        explanation: 'Cryptographic hash functions create unique digital fingerprints (hashes) for each block, ensuring data integrity and linking blocks together securely.'
+                    },
+                    {
+                        question: 'In a blockchain network, what is a consensus mechanism?',
+                        options: { 
+                            A: 'A voting system for users', 
+                            B: 'A protocol that ensures all nodes agree on the validity of transactions', 
+                            C: 'A method to encrypt data', 
+                            D: 'A way to store data' 
+                        },
+                        correct_answer: 'B',
+                        explanation: 'A consensus mechanism is a protocol that ensures all participating nodes in the network agree on the current state of the blockchain and the validity of new transactions.'
+                    },
+                    {
+                        question: 'What is the difference between public and private blockchains?',
+                        options: { 
+                            A: 'Public blockchains are faster', 
+                            B: 'Public blockchains are open to everyone, private blockchains are restricted', 
+                            C: 'Private blockchains are more secure', 
+                            D: 'There is no difference' 
+                        },
+                        correct_answer: 'B',
+                        explanation: 'Public blockchains are open networks where anyone can participate, while private blockchains are restricted networks controlled by specific organizations.'
+                    },
+                    {
+                        question: 'What is a smart contract in blockchain technology?',
+                        options: { 
+                            A: 'A legal document', 
+                            B: 'A self-executing contract with terms directly written into code', 
+                            C: 'A type of cryptocurrency', 
+                            D: 'A blockchain wallet' 
+                        },
+                        correct_answer: 'B',
+                        explanation: 'A smart contract is a self-executing contract where the terms of agreement are directly written into lines of code, automatically executing when conditions are met.'
+                    },
+                    {
+                        question: 'What is the Byzantine Generals Problem in blockchain context?',
+                        options: { 
+                            A: 'A historical military strategy', 
+                            B: 'A problem of achieving consensus in a distributed network with potentially malicious actors', 
+                            C: 'A type of encryption', 
+                            D: 'A blockchain scaling issue' 
+                        },
+                        correct_answer: 'B',
+                        explanation: 'The Byzantine Generals Problem illustrates the challenge of achieving consensus in a distributed network where some participants may be unreliable or malicious.'
+                    }
+                ],
+                'Competitive': [
+                    {
+                        question: 'In Proof of Work consensus, what is the primary computational challenge miners must solve?',
+                        options: { 
+                            A: 'Factoring large prime numbers', 
+                            B: 'Finding a nonce that produces a hash with a specific number of leading zeros', 
+                            C: 'Solving differential equations', 
+                            D: 'Optimizing network routing' 
+                        },
+                        correct_answer: 'B',
+                        explanation: 'In PoW, miners must find a nonce (number used once) that, when combined with block data, produces a hash with a predetermined number of leading zeros, demonstrating computational work.'
+                    },
+                    {
+                        question: 'What is the theoretical maximum transaction throughput of Bitcoin\'s blockchain?',
+                        options: { A: '3-7 transactions per second', B: '1000 transactions per second', C: '100 transactions per second', D: 'Unlimited' },
+                        correct_answer: 'A',
+                        explanation: 'Bitcoin\'s blockchain has a theoretical maximum of approximately 3-7 transactions per second due to its 1MB block size limit and 10-minute block time.'
+                    }
+                ]
+            }
+        },
+        'Computer Science': {
+            'Programming': {
+                'Secondary': [
+                    {
+                        question: 'What is a variable in programming?',
+                        options: { A: 'A fixed number', B: 'A container that stores data values', C: 'A type of loop', D: 'A programming language' },
+                        correct_answer: 'B',
+                        explanation: 'A variable is a container or storage location that holds data values which can be changed during program execution.'
+                    }
+                ],
+                'College': [
+                    {
+                        question: 'What is the time complexity of binary search algorithm?',
+                        options: { A: 'O(n)', B: 'O(log n)', C: 'O(n²)', D: 'O(1)' },
+                        correct_answer: 'B',
+                        explanation: 'Binary search has O(log n) time complexity because it eliminates half of the remaining elements in each step.'
+                    }
+                ]
+            }
+        }
+    };
+    
+    // Get questions for the specific academic level
+    let availableQuestions = [];
+    
+    if (academicQuestionDatabase[subject] && 
+        academicQuestionDatabase[subject][topic] && 
+        academicQuestionDatabase[subject][topic][academicLevel]) {
+        availableQuestions = [...academicQuestionDatabase[subject][topic][academicLevel]];
+    } else if (academicQuestionDatabase[subject] && academicQuestionDatabase[subject][topic]) {
+        // Fallback to any available level for the topic
+        Object.values(academicQuestionDatabase[subject][topic]).forEach(levelQuestions => {
+            availableQuestions.push(...levelQuestions);
+        });
+    } else {
+        // Use blockchain college level as ultimate fallback
+        availableQuestions = [...academicQuestionDatabase['Blockchain']['Basics']['College']];
+    }
+    
+    // Generate additional academic-appropriate questions if needed
+    while (availableQuestions.length < numQuestions) {
+        const questionNum = availableQuestions.length + 1;
+        availableQuestions.push(generateAcademicQuestion(subject, topic, academicLevel, difficulty, questionNum));
+    }
+    
+    // Shuffle and select exactly the requested number
+    const shuffled = availableQuestions.sort(() => 0.5 - Math.random());
+    const selectedQuestions = shuffled.slice(0, numQuestions);
+    
+    // Format questions with proper structure
+    const formattedQuestions = selectedQuestions.map((q, index) => ({
+        id: index + 1,
+        question: q.question,
+        options: q.options,
+        correct_answer: q.correct_answer,
+        explanation: q.explanation,
+        difficulty: difficulty,
+        academic_level: academicLevel,
+        source: 'enhanced_fallback'
+    }));
+    
+    console.log(`✅ Generated ${formattedQuestions.length} enhanced fallback questions for ${academicLevel} level`);
+    
+    return {
+        questions: formattedQuestions,
+        title: `${subject} - ${topic} Quiz (${academicLevel} Level)`,
+        subject: subject,
+        topic: topic,
+        difficulty: difficulty,
+        academic_level: academicLevel,
+        quiz_type: quizType,
+        total_questions: formattedQuestions.length,
+        source: 'enhanced_fallback'
+    };
+}
+
+/**
+ * Generate academic-appropriate question
+ */
+function generateAcademicQuestion(subject, topic, academicLevel, difficulty, questionNum) {
+    const questionTemplates = {
+        'Primary': {
+            question: `What is a simple way to understand ${topic}? (Question ${questionNum})`,
+            options: {
+                A: `${topic} is very complicated`,
+                B: `${topic} is a basic concept in ${subject}`,
+                C: `${topic} is not important`,
+                D: `${topic} is only for experts`
+            },
+            correct_answer: 'B',
+            explanation: `At the primary level, ${topic} should be understood as a fundamental concept in ${subject} that forms the basis for more advanced learning.`
+        },
+        'Secondary': {
+            question: `Which statement best describes ${topic} in ${subject}? (Question ${questionNum})`,
+            options: {
+                A: `${topic} is an outdated concept`,
+                B: `${topic} is a key principle that students should master`,
+                C: `${topic} is only theoretical`,
+                D: `${topic} has no practical applications`
+            },
+            correct_answer: 'B',
+            explanation: `At the secondary level, ${topic} is a key principle in ${subject} that students should master to build a strong foundation for advanced studies.`
+        },
+        'College': {
+            question: `From an analytical perspective, how does ${topic} contribute to the field of ${subject}? (Question ${questionNum})`,
+            options: {
+                A: `${topic} provides foundational understanding and practical applications`,
+                B: `${topic} is purely theoretical with no real-world use`,
+                C: `${topic} is being replaced by newer concepts`,
+                D: `${topic} is only relevant in academic settings`
+            },
+            correct_answer: 'A',
+            explanation: `At the college level, ${topic} provides both foundational understanding and practical applications that are essential for professional competency in ${subject}.`
+        },
+        'Competitive': {
+            question: `In competitive examinations, ${topic} in ${subject} is often tested through which approach? (Question ${questionNum})`,
+            options: {
+                A: `Complex problem-solving and application-based scenarios`,
+                B: `Simple definition recall`,
+                C: `Multiple choice only`,
+                D: `Theoretical explanations only`
+            },
+            correct_answer: 'A',
+            explanation: `Competitive exams test ${topic} through complex problem-solving and application-based scenarios that require deep understanding and analytical skills.`
+        }
+    };
+    
+    return questionTemplates[academicLevel] || questionTemplates['College'];
+}
+
+/**
+ * Generate enhanced fallback questions for specific count
+ */
+function generateEnhancedFallbackQuestions(subject, topic, count, difficulty, academicLevel) {
+    const questions = [];
+    for (let i = 0; i < count; i++) {
+        questions.push(generateAcademicQuestion(subject, topic, academicLevel, difficulty, i + 1));
+    }
+    return questions;
+}
+
+/**
+ * Generate appropriate options for topic
+ */
+function generateOptionsForTopic(topic, subject) {
+    const topicOptions = {
+        'Blockchain': {
+            A: 'Centralized database system',
+            B: 'Decentralized ledger technology',
+            C: 'Traditional banking system',
+            D: 'Social media platform'
+        },
+        'Cryptocurrency': {
+            A: 'Physical currency',
+            B: 'Digital currency using cryptography',
+            C: 'Credit card system',
+            D: 'Bank transfer method'
+        },
+        'Programming': {
+            A: 'Hardware component',
+            B: 'Software development process',
+            C: 'Network protocol',
+            D: 'Database system'
+        }
+    };
+    
+    return topicOptions[topic] || topicOptions['Blockchain'];
+}
     console.log(`🔧 Generating comprehensive fallback quiz: ${numQuestions} questions for ${subject} - ${topic}`);
     
     // Comprehensive question database with real, educational content
@@ -1473,54 +1766,6 @@ function generateComprehensiveFallbackQuiz(subject, topic, quizType, numQuestion
         availableQuestions = [...questionDatabase['Blockchain']['Basics']];
     }
     
-    // If we still don't have enough questions, generate additional ones
-    while (availableQuestions.length < numQuestions) {
-        const questionNum = availableQuestions.length + 1;
-        availableQuestions.push({
-            question: `What is a fundamental concept in ${topic}? (Question ${questionNum})`,
-            options: {
-                A: `Basic principle of ${topic}`,
-                B: `Core concept of ${topic}`,
-                C: `Advanced feature of ${topic}`,
-                D: `Related technology to ${topic}`
-            },
-            correct_answer: 'B',
-            explanation: `This question tests understanding of core ${topic} concepts in ${subject}. The correct answer represents the fundamental principles that students should master.`
-        });
-    }
-    
-    // Shuffle and select the required number of questions
-    const shuffled = availableQuestions.sort(() => 0.5 - Math.random());
-    const selectedQuestions = shuffled.slice(0, numQuestions);
-    
-    // Format questions with proper IDs and validation
-    const formattedQuestions = selectedQuestions.map((q, index) => ({
-        id: index + 1,
-        question: q.question,
-        options: q.options,
-        correct_answer: q.correct_answer,
-        explanation: q.explanation,
-        difficulty: difficulty,
-        source: 'comprehensive_fallback'
-    }));
-    
-    console.log(`✅ Generated ${formattedQuestions.length} comprehensive fallback questions`);
-    
-    return {
-        questions: formattedQuestions,
-        title: `${subject} - ${topic} Quiz`,
-        subject: subject,
-        topic: topic,
-        difficulty: difficulty,
-        quiz_type: quizType,
-        total_questions: formattedQuestions.length,
-        time_limit: 30,
-        instructions: `This quiz covers ${topic} concepts in ${subject} at ${difficulty} difficulty level. Read each question carefully and select the best answer.`,
-        created_at: new Date().toISOString(),
-        source: 'comprehensive_fallback'
-    };
-}
-
 /**
  * Generate fallback assessment when API fails
  */
@@ -2762,11 +3007,12 @@ function showQuizResults(assessment) {
         subject: currentSubject?.name || 'Unknown Subject',
         topic: currentTopic?.name || 'Unknown Topic',
         difficulty: quizDifficulty || 'medium',
-        score: validatedAssessment.percentage,
-        grade: validatedAssessment.grade,
-        totalQuestions: validatedAssessment.total_questions,
-        correctAnswers: validatedAssessment.correct_answers,
-        rawScore: validatedAssessment.score
+        score: validatedAssessment.percentage || 0, // FIX: Use percentage as score
+        grade: validatedAssessment.grade || 'F',
+        totalQuestions: validatedAssessment.total_questions || 0,
+        correctAnswers: validatedAssessment.correct_answers || 0,
+        rawScore: validatedAssessment.score || 0,
+        quizType: quizType || 'mcq'
     };
     
     console.log('📊 Storing quiz result:', quizResult);
@@ -2784,7 +3030,7 @@ function showQuizResults(assessment) {
         topicPerformance[topicKey] = { scores: [], averageScore: 0, totalQuizzes: 0 };
     }
     
-    topicPerformance[topicKey].scores.push(validatedAssessment.percentage);
+    topicPerformance[topicKey].scores.push(validatedAssessment.percentage || 0);
     topicPerformance[topicKey].totalQuizzes++;
     topicPerformance[topicKey].averageScore = Math.round(
         topicPerformance[topicKey].scores.reduce((a, b) => a + b, 0) / topicPerformance[topicKey].scores.length

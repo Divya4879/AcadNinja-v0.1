@@ -239,45 +239,54 @@ def generate_quiz():
         
         print(f"Generating {quiz_type} quiz: {num_questions} questions for {subject} - {topic} (Difficulty: {difficulty})")
         
-        # Create prompt based on quiz type
+        # Create enhanced prompt based on quiz type
         if quiz_type == 'mcq':
-            system_prompt = f"""You are an internationally renowned educator and master of {subject} at the {academic_level} level. You have deep expertise in {topic}.
+            system_prompt = f"""You are an internationally renowned educator and expert in {subject} at the {academic_level} level. You have deep expertise in {topic}.
 
-Create {num_questions} multiple-choice questions about {topic} for {academic_level} level students with {difficulty} difficulty.
+Create EXACTLY {num_questions} multiple-choice questions about {topic} for {academic_level} level students with {difficulty} difficulty.
 
 Context: {context}
 
+Academic Level Guidelines:
+- Primary: Simple concepts, basic vocabulary, concrete examples
+- Secondary: Intermediate concepts, some abstract thinking, real-world applications
+- College: Advanced concepts, critical thinking, theoretical understanding
+- Competitive: Expert-level, complex problem-solving, advanced applications
+
 Difficulty Guidelines:
-- Easy: Basic recall and understanding questions
-- Medium: Application and analysis questions  
+- Easy: Basic recall and understanding questions, fundamental concepts
+- Medium: Application and analysis questions, connecting concepts
 - Hard: Synthesis, evaluation, and complex problem-solving questions
 
-Requirements:
-- Questions should be appropriate for {academic_level} level students
-- All questions should be at {difficulty} difficulty level
-- Include 4 options (A, B, C, D) for each question
-- Provide the correct answer
-- Questions should test understanding, application, and critical thinking
-- Include brief explanations for correct answers
-- Ensure questions are clear and unambiguous
+CRITICAL REQUIREMENTS:
+- Generate EXACTLY {num_questions} questions - no more, no less
+- Questions must be appropriate for {academic_level} level students
+- All questions must be at {difficulty} difficulty level
+- Each question must have exactly 4 options (A, B, C, D)
+- Provide the correct answer for each question
+- Include detailed explanations for why the correct answer is right
+- Questions should test deep understanding, not just memorization
+- Make questions meaningful and educational
+- Ensure questions are clear, unambiguous, and well-structured
 
-You MUST respond with ONLY valid JSON. No other text, no markdown, no explanations. Just the JSON object.
+You MUST respond with ONLY valid JSON. No other text, no markdown, no explanations outside the JSON.
 
-Format:
+EXACT FORMAT REQUIRED:
 {{
   "questions": [
     {{
       "id": 1,
-      "question": "What is the main concept being tested?",
+      "question": "What is [specific concept about {topic}]?",
       "options": {{
-        "A": "First option",
-        "B": "Second option", 
-        "C": "Third option",
-        "D": "Fourth option"
+        "A": "First detailed option",
+        "B": "Second detailed option", 
+        "C": "Third detailed option",
+        "D": "Fourth detailed option"
       }},
-      "correct_answer": "A",
-      "explanation": "Brief explanation of why this is correct",
-      "difficulty": "{difficulty}"
+      "correct_answer": "B",
+      "explanation": "Detailed explanation of why option B is correct and why others are wrong",
+      "difficulty": "{difficulty}",
+      "academic_level": "{academic_level}"
     }}
   ]
 }}"""
@@ -315,30 +324,30 @@ Format:
   ]
 }}"""
         
-        # Make request to Groq API
+        # Make enhanced request to Groq API
         headers = {
             'Authorization': f'Bearer {GROQ_API_KEY}',
             'Content-Type': 'application/json'
         }
         
         payload = {
-            'model': 'llama3-8b-8192',  # Use faster model for better JSON compliance
+            'model': 'llama3-8b-8192',
             'messages': [
                 {
                     'role': 'system',
-                    'content': 'You are a helpful assistant that always responds with valid JSON only. Never include any text outside of the JSON object.'
+                    'content': f'You are an expert educator. Generate EXACTLY {num_questions} high-quality questions. Always respond with valid JSON only. No markdown, no extra text.'
                 },
                 {
                     'role': 'user',
                     'content': system_prompt
                 }
             ],
-            'max_tokens': 2000,
-            'temperature': 0.3,  # Lower temperature for more consistent JSON
+            'max_tokens': 4000,  # Increased for more questions
+            'temperature': 0.7,  # Balanced for creativity and consistency
             'top_p': 0.9
         }
         
-        print("Making request to Groq API...")
+        print(f"Making request to Groq API for {num_questions} questions...")
         
         session = create_http_session()
         
